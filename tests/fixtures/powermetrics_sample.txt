@@ -1,0 +1,42 @@
+Machine model: Mac15,14
+OS version: 25D2128
+Boot arguments:
+Boot time: Tue Apr 14 16:54:50 2026
+
+
+
+*** Sampled system activity (Thu Apr 16 00:14:38 2026 +0300) (1023.99ms elapsed) ***
+
+
+**** Processor usage ****
+
+E0-Cluster Online: 100%
+E0-Cluster HW active frequency: 1428 MHz
+E0-Cluster HW active residency:  41.46% (1020 MHz:  37% 1320 MHz:  28% 1704 MHz:  24%)
+E0-Cluster idle residency:  58.54%
+CPU 0 frequency: 1462 MHz
+CPU 0 active residency:  34.80%
+CPU 0 idle residency:  65.20%
+
+P0-Cluster Online: 100%
+P0-Cluster HW active frequency: 0 MHz
+P0-Cluster HW active residency:   0.00%
+P0-Cluster idle residency: 100.00%
+CPU 4 frequency: 0 MHz
+CPU 4 active residency:   0.00%
+CPU 4 idle residency: 100.00%
+
+CPU Power: 4200 mW
+GPU Power: 6800 mW
+ANE Power: 0 mW
+Combined Power (CPU + GPU + ANE): 12000 mW
+
+**** GPU usage ****
+
+GPU HW active frequency: 1398 MHz
+GPU HW active residency:  75.00% (338 MHz:   0% 618 MHz:   0% 1380 MHz:  75%)
+GPU SW requested state: (P1 :   0% P2 :   0% P3 :   0% P4 :   0% P5 :   0% P6 :   0% P7 :   0% P8 : 100%)
+GPU SW state: (SW_P1 :   0% SW_P8 : 100%)
+GPU idle residency:  25.00%
+GPU Power: 6800 mW
+

@@ -1,0 +1,91 @@
+[
+  {
+    "pid": 1001,
+    "ppid": 1,
+    "name": "sshd",
+    "username": "root",
+    "cmdline": ["sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups"],
+    "create_time": 1744728000.0,
+    "connections": []
+  },
+  {
+    "pid": 1100,
+    "ppid": 1001,
+    "name": "sshd",
+    "username": "root",
+    "cmdline": ["sshd: core [priv]"],
+    "create_time": 1744729000.0,
+    "connections": []
+  },
+  {
+    "pid": 1101,
+    "ppid": 1100,
+    "name": "sshd",
+    "username": "core",
+    "cmdline": ["sshd: core@pts/0"],
+    "create_time": 1744729001.0,
+    "connections": [
+      {"raddr_ip": "100.64.0.2", "raddr_port": 51234}
+    ]
+  },
+  {
+    "pid": 1200,
+    "ppid": 1001,
+    "name": "sshd",
+    "username": "root",
+    "cmdline": ["sshd: friend [priv]"],
+    "create_time": 1744730000.0,
+    "connections": []
+  },
+  {
+    "pid": 1201,
+    "ppid": 1200,
+    "name": "sshd",
+    "username": "friend",
+    "cmdline": ["sshd: friend@pts/1"],
+    "create_time": 1744730001.0,
+    "connections": [
+      {"raddr_ip": "203.0.113.9", "raddr_port": 44321}
+    ]
+  },
+  {
+    "pid": 1300,
+    "ppid": 1001,
+    "name": "sshd-session",
+    "username": "root",
+    "cmdline": ["sshd-session: vsuser [priv]"],
+    "create_time": 1744731000.0,
+    "connections": []
+  },
+  {
+    "pid": 1301,
+    "ppid": 1300,
+    "name": "sshd-session",
+    "username": "vsuser",
+    "cmdline": ["sshd-session: vsuser@notty"],
+    "create_time": 1744731001.0,
+    "connections": [
+      {"raddr_ip": "100.64.0.3", "raddr_port": 55555}
+    ]
+  },
+  {
+    "pid": 1400,
+    "ppid": 1001,
+    "name": "sshd-session",
+    "username": "root",
+    "cmdline": ["sshd-session: core [priv]"],
+    "create_time": 1744732000.0,
+    "connections": []
+  },
+  {
+    "pid": 1401,
+    "ppid": 1400,
+    "name": "sshd-session",
+    "username": "core",
+    "cmdline": ["sshd-session: core@ttys001"],
+    "create_time": 1744732001.0,
+    "connections": [
+      {"raddr_ip": "100.64.0.2", "raddr_port": 61234}
+    ]
+  }
+]
