@@ -30,14 +30,14 @@ def test_token_fingerprint_is_deterministic_and_short():
 def test_format_audit_line_basic_fields():
     line = format_audit_line(
         "kill",
-        {"pid": 42, "signal": 15, "by": "100.64.0.2", "token": "example-fp", "result": "ok"},
+        {"pid": 42, "signal": 15, "by": "100.64.0.2", "token": "deadbeef", "result": "ok"},
     )
     # Action comes first, remaining keys preserve insertion order.
     assert " action=kill " in line
     assert "pid=42" in line
     assert "signal=15" in line
     assert "by=100.64.0.2" in line
-    assert "token=example-fp" in line
+    assert "token=deadbeef" in line
     assert "result=ok" in line
     # Leading timestamp is ISO8601 with trailing Z.
     head = line.split(" ", 1)[0]

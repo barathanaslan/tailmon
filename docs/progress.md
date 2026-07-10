@@ -128,26 +128,6 @@ Items in rough priority order. Phase 2.5 (polish) bundles small correctness/disp
 
 - **B5. SSH idle-time validation** — `_tty_idle_seconds` uses `os.stat("/dev/<tty>").st_atime`. No real sustained SSH session was active during Phase 2b verification. Action: open a real session, let it sit idle for 60s, check `studio who` reports a sane `idle` column; if atime semantics are wrong, swap to parsing `utmpx` or `last` output. Small task.
 
-### Phase 4 hotfixes — B18 ATS + B19 sshd-session filter (FIXED 2026-04-16)
-
-Two real-hardware bugs surfaced while verifying the menubar app against the live collector. Both fixed inline, deployed, verified.
-
-**B18 — menubar app couldn't reach the collector (ATS block)**
-
-First launch of the installed `StudioMenuBar.app` showed a red connection dot and an orange "cannot reach collector" banner, even though the CLI on the same machine could reach `/health` and `/stats` over Tailscale without issue. Root cause: macOS App Transport Security blocks plain HTTP URLSession requests by default; `http://100.80.21.79:8765` is non-TLS so URLSession silently dropped every poll. The worker-built `Info.plist` did not include an ATS exception.
-
-Fix: added `NSAppTransportSecurity > NSAllowsArbitraryLoads = YES` to `menubar/Info.plist` with a comment explaining why (CGNAT overlay already encrypted at the WireGuard layer; personal tool talking to one host). Rebuilt via `bash menubar/build.sh` and reinstalled via `bash menubar/install.sh`. Green dot and live data appeared immediately after restart. One-key fix; test suite unaffected.
-
-**B19 — `studio who` empty on real Mac Studio (`sshd-session:` process name)**
-
-`studio who` returned "No active SSH sessions." on the real Studio even though the user had two live SSH sessions (one interactive ttys001, one VSCode Remote-SSH with notty). Diagnosis via `ps -eo pid,ppid,user,command` showed the sshd child processes are named **`sshd-session: <user>@<tty>`** on macOS 26.3 (OpenSSH's session-per-process model), not the legacy `sshd: <user>@<tty>`. The collector's walker (`src/collector/sources/ssh_sessions.py`) filtered on the literal substring `"sshd:"`, which doesn't match `sshd-session:`. Result: **every session was dropped**, silently, since Phase 2b. We missed it in Phase 2b/3 verification because "No active SSH sessions" at the moment of each check happened to look plausible.
-
-Fix: extended the substring filter to accept both `sshd:` and `sshd-session:` prefixes via a `_SSHD_CHILD_MARKERS` tuple, and updated `_SSHD_CHILD_RE` to `sshd(?:-session)?:\s+([^\s\[@]+)`. Expanded `tests/fixtures/sshd_processes.json` to cover both prefixes plus a notty (no-pty) case (VSCode Remote-SSH shape). Updated `tests/test_ssh.py` assertions: the walker now returns 4 sessions from the fixture (was 2), three unique users, and correctly handles `tty=None` / `idle=None` for notty sessions. Full suite still 240 passed, 5 skipped.
-
-Deployed via `rsync` + `sudo bash deploy/update-server.sh`. Post-deploy `studio who` returns both sessions: interactive `ttys001` with live idle-time, and VSCode's `notty` session with idle=None. The menubar app's SSH tab populates on next poll.
-
-**Non-blocker still open**: the `Peer` column shows `-` for both sessions because of B15 (`tailscale status --json` returning non-JSON when called from the root daemon → empty peer map). Session data is correct; only the Tailscale device labels are missing.
-
 ### Phase 3 hotfix — B17 root-vs-user tmux namespace (FIXED 2026-04-16)
 
 **Status**: code shipped, deployed, verified end-to-end.

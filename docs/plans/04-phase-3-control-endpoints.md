@@ -73,7 +73,7 @@ This is the first phase that lets the user do more than *observe* the Mac Studio
 **Audit log line** (always, even on failure):
 
 ```
-2026-04-16T00:30:00.123Z kill pid=12345 signal=15 name=python user=barathanaslan by=100.64.0.2 token=<fp> result=ok
+2026-04-16T00:30:00.123Z kill pid=12345 signal=15 name=python user=barathanaslan by=100.64.0.2 token=abc12345 result=ok
 ```
 
 ### `POST /ssh/kick`

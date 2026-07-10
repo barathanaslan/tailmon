@@ -28,11 +28,3 @@ htmlcov/
 # Secrets / local dev
 .studiod-dev-token
 *.token
-studiod-audit.log
-
-# Swift / SPM / Xcode
-menubar/.build/
-menubar/build/
-*.xcodeproj/xcuserdata/
-*.xcworkspace/xcuserdata/
-DerivedData/
