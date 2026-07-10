@@ -32,7 +32,28 @@ const SchemaVersion = 1
 // CPU%. One sample therefore takes ~cpuWindow wall time.
 const cpuWindow = 500 * time.Millisecond
 
-const topProcCount = 5
+// DefaultTopProcs / MaxTopProcs bound the top_procs list. The default keeps
+// responses small; the hard cap keeps a hostile/typo'd ?top= from turning one
+// sample into a full process-table dump.
+const (
+	DefaultTopProcs = 5
+	MaxTopProcs     = 25
+)
+
+// ClampTop clamps a requested top-process count to [1, MaxTopProcs].
+func ClampTop(n int) int {
+	if n < 1 {
+		return 1
+	}
+	if n > MaxTopProcs {
+		return MaxTopProcs
+	}
+	return n
+}
+
+// commandMaxLen bounds the per-process command string (additive schema field;
+// long argv lists get truncated with an ellipsis).
+const commandMaxLen = 100
 
 // Stats is the versioned snapshot served at /stats and printed by `sample`.
 // Fields a platform cannot provide are null, never fabricated.
@@ -90,6 +111,9 @@ type Proc struct {
 	Name   string  `json:"name"`
 	CPUPct float64 `json:"cpu_pct"`
 	MemMB  float64 `json:"mem_mb"`
+	// Command is the (truncated) command line — additive schema-1 field,
+	// omitted when the platform can't provide it cheaply.
+	Command string `json:"command,omitempty"`
 }
 
 // Agent is the sampler's own footprint — the monitor must monitor itself.
@@ -102,9 +126,17 @@ type Agent struct {
 
 var processStart = time.Now()
 
-// Collect gathers one snapshot. It blocks for ~cpuWindow (the CPU measurement
-// window). It never returns a nil *Stats together with a nil error.
+// Collect gathers one snapshot with the default top-process count. It blocks
+// for ~cpuWindow (the CPU measurement window). It never returns a nil *Stats
+// together with a nil error.
 func Collect(ctx context.Context) (*Stats, error) {
+	return CollectTop(ctx, DefaultTopProcs)
+}
+
+// CollectTop is Collect with an explicit top-process count (clamped to
+// [1, MaxTopProcs]).
+func CollectTop(ctx context.Context, topN int) (*Stats, error) {
+	topN = ClampTop(topN)
 	s := &Stats{
 		Schema:   SchemaVersion,
 		Host:     shortHostname(),
@@ -134,7 +166,7 @@ func Collect(ctx context.Context) (*Stats, error) {
 		s.CPU.Cores = n
 	}
 	s.CPU.Load1 = loadAvg1(ctx)
-	s.TopProcs = topProcs(ctx, procs)
+	s.TopProcs = topProcs(ctx, procs, topN)
 
 	// --- Memory. used = total - available: matches Activity Monitor and
 	// avoids the "only 2GB used when it's really 8GB" misread. ---
@@ -185,8 +217,8 @@ func SelfStats() Agent {
 }
 
 // topProcs finishes the per-process CPU window primed in Collect and returns
-// the top N by CPU. Name/RSS are only fetched for the winners.
-func topProcs(ctx context.Context, procs []*process.Process) []Proc {
+// the top N by CPU. Name/RSS/command are only fetched for the winners.
+func topProcs(ctx context.Context, procs []*process.Process, topN int) []Proc {
 	type scored struct {
 		p   *process.Process
 		pct float64
@@ -201,9 +233,9 @@ func topProcs(ctx context.Context, procs []*process.Process) []Proc {
 	}
 	sort.Slice(scoredProcs, func(i, j int) bool { return scoredProcs[i].pct > scoredProcs[j].pct })
 
-	top := make([]Proc, 0, topProcCount)
+	top := make([]Proc, 0, topN)
 	for _, sp := range scoredProcs {
-		if len(top) == topProcCount {
+		if len(top) == topN {
 			break
 		}
 		name, err := sp.p.NameWithContext(ctx)
@@ -214,9 +246,23 @@ func topProcs(ctx context.Context, procs []*process.Process) []Proc {
 		if mi, err := sp.p.MemoryInfoWithContext(ctx); err == nil && mi != nil {
 			entry.MemMB = round1(float64(mi.RSS) / 1024 / 1024)
 		}
+		if cl, err := sp.p.CmdlineWithContext(ctx); err == nil {
+			entry.Command = shortCommand(cl)
+		}
 		top = append(top, entry)
 	}
 	return top
+}
+
+// shortCommand collapses a command line to one bounded single-spaced line.
+// gopsutil reads it without subprocesses on all three platforms (sysctl on
+// darwin, /proc on linux, PEB read on windows), so this stays cheap.
+func shortCommand(cl string) string {
+	cl = strings.Join(strings.Fields(cl), " ")
+	if r := []rune(cl); len(r) > commandMaxLen {
+		cl = string(r[:commandMaxLen-1]) + "…"
+	}
+	return cl
 }
 
 // shortHostname lowercases and strips the domain: "Barathans-MacStudio.local"

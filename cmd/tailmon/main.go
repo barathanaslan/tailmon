@@ -55,9 +55,15 @@ func main() {
 		_ = fs.Parse(args)
 		err = agent.Run(ctx, *port)
 	case "sample":
-		err = runSample(ctx)
+		fs := flag.NewFlagSet("sample", flag.ExitOnError)
+		top := fs.Int("top", 0, "top processes to include (default agent setting, max 25)")
+		_ = fs.Parse(args)
+		err = runSample(ctx, *top)
 	case "json":
-		err = runJSON(ctx)
+		fs := flag.NewFlagSet("json", flag.ExitOnError)
+		top := fs.Int("top", 0, "top processes per host (default agent setting, max 25)")
+		_ = fs.Parse(args)
+		err = runJSON(ctx, *top)
 	case "version":
 		fmt.Println("tailmon " + version.Version)
 	case "help", "-h", "--help":
@@ -72,17 +78,22 @@ func main() {
 	}
 }
 
-func runSample(ctx context.Context) error {
-	s, err := sample.Collect(ctx)
+func runSample(ctx context.Context, top int) error {
+	var s *sample.Stats
+	var err error
+	if top > 0 {
+		s, err = sample.CollectTop(ctx, top)
+	} else {
+		s, err = sample.Collect(ctx)
+	}
 	if err != nil {
 		return err
 	}
 	return printJSON(s)
 }
 
-func runJSON(ctx context.Context) error {
-	report := aggregate.Collect(ctx)
-	return printJSON(report)
+func runJSON(ctx context.Context, top int) error {
+	return printJSON(aggregate.CollectTop(ctx, top))
 }
 
 func printJSON(v any) error {

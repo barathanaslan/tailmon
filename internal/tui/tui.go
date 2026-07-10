@@ -139,13 +139,13 @@ func (m *model) fetchCmd(r *row) tea.Cmd {
 		if self {
 			// Prefer the installed local agent (its self-stats are the real
 			// deployed footprint); fall back to sampling in-process.
-			if s, err := aggregate.FetchStats(ctx, client, "127.0.0.1", agent.DefaultPort); err == nil {
+			if s, err := aggregate.FetchStats(ctx, client, "127.0.0.1", agent.DefaultPort, 0); err == nil {
 				return statsMsg{name, s, nil}
 			}
 			s, err := sample.Collect(ctx)
 			return statsMsg{name, s, err}
 		}
-		s, err := aggregate.FetchStats(ctx, client, ip, agent.DefaultPort)
+		s, err := aggregate.FetchStats(ctx, client, ip, agent.DefaultPort, 0)
 		return statsMsg{name, s, err}
 	}
 }

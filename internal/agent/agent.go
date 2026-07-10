@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"strconv"
 	"time"
 
 	"github.com/barathanaslan/studio-cli/internal/sample"
@@ -22,18 +23,30 @@ import (
 // DefaultPort: 7020 (7012/7013/8765 are taken by other services here).
 const DefaultPort = 7020
 
-// Handler returns the agent's HTTP handler: GET /stats and GET /health.
+// Handler returns the agent's HTTP handler: GET /stats (optional ?top=N,
+// clamped to [1, MaxTopProcs], default DefaultTopProcs) and GET /health.
 func Handler() http.Handler {
 	c := &sampleCache{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /stats", func(w http.ResponseWriter, r *http.Request) {
-		data, err := c.get(r.Context())
+		n := sample.DefaultTopProcs
+		if v := r.URL.Query().Get("top"); v != "" {
+			if parsed, err := strconv.Atoi(v); err == nil {
+				n = sample.ClampTop(parsed)
+			}
+		}
+		stats, err := c.get(r.Context())
 		if err != nil {
 			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
 			return
 		}
+		// Shallow copy + trim: the cached Stats is shared, never mutated.
+		out := *stats
+		if len(out.TopProcs) > n {
+			out.TopProcs = out.TopProcs[:n]
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(data)
+		_ = json.NewEncoder(w).Encode(&out)
 	})
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

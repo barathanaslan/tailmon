@@ -56,8 +56,12 @@ func NewClient() *http.Client {
 }
 
 // FetchStats GETs one agent's /stats. Shared by `json` and the TUI.
-func FetchStats(ctx context.Context, client *http.Client, ip string, port int) (*sample.Stats, error) {
+// top > 0 requests that many top processes (?top=N); 0 means server default.
+func FetchStats(ctx context.Context, client *http.Client, ip string, port, top int) (*sample.Stats, error) {
 	url := fmt.Sprintf("http://%s:%d/stats", ip, port)
+	if top > 0 {
+		url += fmt.Sprintf("?top=%d", sample.ClampTop(top))
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -80,7 +84,11 @@ func FetchStats(ctx context.Context, client *http.Client, ip string, port int) (
 // Collect discovers peers and queries every reachable agent in parallel. The
 // local machine is sampled in-process — it shows up even with no local agent
 // running. With no tailscale CLI it degrades to localhost only.
-func Collect(ctx context.Context) *Report {
+func Collect(ctx context.Context) *Report { return CollectTop(ctx, 0) }
+
+// CollectTop is Collect with an explicit top-process count per host
+// (0 = default).
+func CollectTop(ctx context.Context, top int) *Report {
 	report := &Report{Schema: sample.SchemaVersion}
 	hosts, err := discover.Hosts(ctx)
 	if err != nil {
@@ -93,13 +101,13 @@ func Collect(ctx context.Context) *Report {
 	results := make([]HostResult, 0, len(hosts)+1)
 
 	if len(hosts) == 0 {
-		results = append(results, localResult(ctx, discover.Host{Self: true}))
+		results = append(results, localResult(ctx, discover.Host{Self: true}, top))
 	} else {
 		results = results[:len(hosts)]
 		var wg sync.WaitGroup
 		for i, h := range hosts {
 			if h.Self {
-				results[i] = localResult(ctx, h)
+				results[i] = localResult(ctx, h, top)
 				continue
 			}
 			if !h.Online {
@@ -110,7 +118,7 @@ func Collect(ctx context.Context) *Report {
 			go func(i int, h discover.Host) {
 				defer wg.Done()
 				r := HostResult{Host: h.Name, IP: h.IP, OS: h.OS, Source: "agent"}
-				stats, err := FetchStats(ctx, client, h.IP, agent.DefaultPort)
+				stats, err := FetchStats(ctx, client, h.IP, agent.DefaultPort, top)
 				if err != nil {
 					r.Status, r.Source, r.Error = StatusNoAgent, "", err.Error()
 				} else {
@@ -128,10 +136,16 @@ func Collect(ctx context.Context) *Report {
 	return report
 }
 
-// localResult samples this machine in-process.
-func localResult(ctx context.Context, h discover.Host) HostResult {
+// localResult samples this machine in-process (top 0 = default count).
+func localResult(ctx context.Context, h discover.Host, top int) HostResult {
 	r := HostResult{Host: h.Name, IP: h.IP, OS: h.OS, Status: StatusLive, Source: "local"}
-	stats, err := sample.Collect(ctx)
+	var stats *sample.Stats
+	var err error
+	if top > 0 {
+		stats, err = sample.CollectTop(ctx, top)
+	} else {
+		stats, err = sample.Collect(ctx)
+	}
 	if err != nil {
 		r.Status, r.Source, r.Error = StatusNoAgent, "", err.Error()
 		return r
