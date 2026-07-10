@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**Phase 4 code-complete (offline).** SwiftUI menubar app shipped under `menubar/`. `swift build -c release` succeeds, the hand-rolled test harness reports **43 passed, 0 failed**, and `bash menubar/build.sh` produces an ad-hoc signed `menubar/build/StudioMenuBar.app` that passes `codesign -v` (Signature=adhoc, Identifier=com.bosphorify.studiomenubar, arm64). Awaiting human install + live smoke test against the real collector.
+**v2 tailmon MVP shipped and verified live (2026-07-10)** — see the dated entry at the bottom of this file. Everything between here and that entry is v1 (Python) history; the v1 stack itself is archived on the `v1-python` branch and is no longer on `main`.
 
 ## Status
 
@@ -257,3 +257,56 @@ One minor observation for future consideration (NOT a blocker, NOT implemented):
 8. Tmux tab: type `smoke-test` in the New field, click New. Verify the row appears on the next poll. On the Studio: `tmux kill-session -t smoke-test` to clean up.
 9. Optional: in System Settings -> General -> Login Items, verify `StudioMenuBar` is listed under "Allow in the Background". Reboot / logout+login to confirm launch-at-login works.
 10. When done testing (or if anything goes wrong): `bash uninstall.sh`. Expect the icon to disappear and the launchd agent to be removed.
+
+## v2 tailmon MVP (2026-07-10)
+
+Executed `docs/plans/v2-tailmon-mvp.md`: Go rewrite, single `tailmon` binary
+(module `github.com/barathanaslan/studio-cli`), Python v1 removed from `main`
+(archived on `v1-python`). Subcommands: TUI (default) / `agent` / `sample` /
+`json` / `version`. Port 7020, binds Tailscale IP + 127.0.0.1 only, no root,
+no tokens. Deps: gopsutil/v4, bubbletea v1.3.10, lipgloss v1.1.0, stdlib.
+
+**Verification (all on real hardware):**
+
+- `go vet ./...` + `go test ./...` green. Soak test: 5,000 in-process /stats
+  requests → RSS 20.0→23.0 MB (**+3.03 MB**, limit 10), goroutines 6→3
+  (returns below baseline). Parser tests for ioreg / nvidia-smi CSV /
+  memory_pressure / tailscale status JSON from captured real output.
+- Studio `tailmon sample`: cpu 3.6% / 28 cores / load1 4.4; mem used 16427 of
+  98304 MB (used = total − available), pressure normal; GPU "Apple M3 Ultra"
+  util from ioreg (`"Device Utilization %"` key present as planned, no
+  adaptation needed); disk 209.4/926.4 GB; real top_procs; agent self-block.
+- Agent + `tailmon json`: agent answered on 127.0.0.1:7020 AND
+  100.80.21.79:7020; json showed studio `live` (local in-process), 5070 +
+  MacBook `offline`; with the 5070 awake but serviceless it showed `no-agent`.
+- Windows end-to-end: `cuda on` (up ~45s), scp'd exe, `ssh barat@100.95.91.27
+  "tailmon.exe sample"` → RTX 5070 Ti util 0% / VRAM 176/16303 MB / 34°C,
+  mem 4910/64673 MB, 24 cores, load1 null, C: + E: disks. Only tailmon.exe
+  dropped in the home dir; Task Scheduler service NOT installed (needs admin —
+  owner runs `deploy/install-windows.ps1` once). `cuda off` clean afterward.
+- launchd agent installed on the Studio via `deploy/install-macos.sh`
+  (user LaunchAgent `com.bosphorify.tailmon`, ~/bin/tailmon): idle at
+  **0.0% CPU, ~22 MB RSS**; `curl http://100.80.21.79:7020/stats | jq .agent`
+  works.
+- TUI smoke-tested on a pty: cards render with live data + sparklines, states
+  live/no-agent/offline correct, `q` exits cleanly with zero leftover
+  processes. (Headless-pty note: a pty that doesn't answer terminal capability
+  queries (OSC 11 / CSI 6n) eats the first keypress — a test-harness artifact,
+  not an app bug; verified fine with query-answering pty and real terminals.)
+
+**Decisions during implementation:**
+
+- CGO_ENABLED=0 everywhere — gopsutil v4 gives identical real numbers on
+  darwin without cgo (verified side by side).
+- Discovery filters peers to agent-capable OSes (macOS/windows/linux); the
+  tailnet's phones and shared-in devices would otherwise clutter every view.
+- TUI prefers the local :7020 agent for the self row (surfaces the deployed
+  agent's real RSS), falling back to in-process sampling; `tailmon json`
+  always samples local in-process per the plan.
+- The wake affordance keys off "offline Windows host + local ~/bin/cuda
+  exists" rather than a hardcoded hostname.
+
+**Still to do (later phases):** run `deploy/install-windows.ps1` on the PC as
+admin (owner, once); install on the MacBook when it comes online (`git pull &&
+./build.sh && ./deploy/install-macos.sh`); rework `menubar/` against the v2
+agent (see `menubar/STATUS.md`).
