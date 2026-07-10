@@ -1,20 +1,17 @@
 // Package tui is the bubbletea monitor: one card per tailnet host showing
-// live resource usage. Monitor-only — no kill/tmux/control.
+// live resource usage. Monitor-only — no kill/tmux/control, and deliberately
+// NO power controls: waking/shutting the CUDA box happens outside tailmon
+// (`cuda on`/`cuda off`), per the owner's explicit preference (2026-07-10).
 //
 // Anti-leak rules honored here: fixed-size ring buffers (120 slots per host,
 // allocated once), 800ms request timeouts, 10s probe backoff for hosts
-// without an agent, an in-flight guard so retries never stack, and every
-// subprocess is tied to the program context so quitting leaves nothing
-// behind.
+// without an agent, and an in-flight guard so retries never stack.
 package tui
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -32,7 +29,6 @@ const (
 	discoverInterval = 10 * time.Second
 	historySlots     = 120
 	sparklineWidth   = 40
-	wakeTimeout      = 3 * time.Minute
 )
 
 // ring is a fixed-capacity history buffer — allocated once, never grows.
@@ -73,9 +69,6 @@ type row struct {
 	ramHist   ring
 	inFlight  bool
 	nextProbe time.Time
-	waking    bool
-	wakeStart time.Time
-	shutting  bool
 }
 
 type model struct {
@@ -84,8 +77,6 @@ type model struct {
 	rows         []*row
 	selected     int
 	paused       bool
-	confirming   bool // shutdown confirm pending for selected row
-	cudaBin      string
 	statusMsg    string
 	tsMissing    bool
 	lastDiscover time.Time
@@ -104,20 +95,10 @@ type (
 		stats *sample.Stats
 		err   error
 	}
-	wakeDoneMsg struct {
-		name string
-		out  string
-		err  error
-	}
-	shutdownDoneMsg struct {
-		name string
-		out  string
-		err  error
-	}
 )
 
 // Run starts the TUI and blocks until quit. The derived context is canceled
-// on exit so in-flight requests and spawned processes (cuda on/off) die too.
+// on exit so in-flight requests die too.
 func Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -131,14 +112,7 @@ func Run(ctx context.Context) error {
 }
 
 func newModel(ctx context.Context) *model {
-	m := &model{ctx: ctx, client: aggregate.NewClient(), width: 100}
-	if home, err := os.UserHomeDir(); err == nil {
-		p := filepath.Join(home, "bin", "cuda")
-		if st, err := os.Stat(p); err == nil && !st.IsDir() {
-			m.cudaBin = p
-		}
-	}
-	return m
+	return &model{ctx: ctx, client: aggregate.NewClient(), width: 100}
 }
 
 func (m *model) Init() tea.Cmd {
@@ -173,28 +147,6 @@ func (m *model) fetchCmd(r *row) tea.Cmd {
 		}
 		s, err := aggregate.FetchStats(ctx, client, ip, agent.DefaultPort)
 		return statsMsg{name, s, err}
-	}
-}
-
-func wakeCmd(ctx context.Context, bin, name string) tea.Cmd {
-	return func() tea.Msg {
-		cctx, cancel := context.WithTimeout(ctx, wakeTimeout)
-		defer cancel()
-		cmd := exec.CommandContext(cctx, bin, "on")
-		cmd.Stdin = nil
-		out, err := cmd.CombinedOutput()
-		return wakeDoneMsg{name, lastLine(string(out)), err}
-	}
-}
-
-func shutdownCmd(ctx context.Context, bin, name string) tea.Cmd {
-	return func() tea.Msg {
-		cctx, cancel := context.WithTimeout(ctx, time.Minute)
-		defer cancel()
-		cmd := exec.CommandContext(cctx, bin, "off")
-		cmd.Stdin = nil
-		out, err := cmd.CombinedOutput()
-		return shutdownDoneMsg{name, lastLine(string(out)), err}
 	}
 }
 
@@ -235,57 +187,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statsMsg:
 		m.applyStats(msg)
 		return m, nil
-
-	case wakeDoneMsg:
-		for _, r := range m.rows {
-			if r.host.Name == msg.name {
-				r.waking = false
-			}
-		}
-		if msg.err != nil {
-			m.statusMsg = fmt.Sprintf("wake failed: %s", firstNonEmpty(msg.out, msg.err.Error()))
-			return m, nil
-		}
-		m.statusMsg = msg.name + " is awake"
-		m.discovering = true
-		return m, discoverCmd(m.ctx)
-
-	case shutdownDoneMsg:
-		for _, r := range m.rows {
-			if r.host.Name == msg.name {
-				r.shutting = false
-			}
-		}
-		if msg.err != nil {
-			// cuda off self-guards (refuses while the GPU is busy) — surface that.
-			m.statusMsg = fmt.Sprintf("shutdown refused/failed: %s", firstNonEmpty(msg.out, msg.err.Error()))
-			return m, nil
-		}
-		m.statusMsg = msg.name + " shutting down"
-		m.discovering = true
-		return m, discoverCmd(m.ctx)
 	}
 	return m, nil
 }
 
 func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-
-	if m.confirming {
-		m.confirming = false
-		if key == "y" {
-			r := m.currentRow()
-			if r != nil && m.cudaBin != "" {
-				r.shutting = true
-				m.statusMsg = "running cuda off…"
-				return m, shutdownCmd(m.ctx, m.cudaBin, r.host.Name)
-			}
-		}
-		m.statusMsg = "shutdown canceled"
-		return m, nil
-	}
-
-	switch key {
+	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "p":
@@ -307,19 +214,6 @@ func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "k", "up":
 		if m.selected > 0 {
 			m.selected--
-		}
-	case "w":
-		r := m.currentRow()
-		if r != nil && m.canWake(r) {
-			r.waking = true
-			r.wakeStart = time.Now()
-			m.statusMsg = "waking " + r.host.Name + "…"
-			return m, wakeCmd(m.ctx, m.cudaBin, r.host.Name)
-		}
-	case "s":
-		r := m.currentRow()
-		if r != nil && m.canShutdown(r) {
-			m.confirming = true
 		}
 	}
 	return m, nil
@@ -426,20 +320,6 @@ func (m *model) currentRow() *row {
 	return m.rows[m.selected]
 }
 
-// canWake: the CUDA box affordance — an offline Windows host, with the local
-// ~/bin/cuda helper present.
-func (m *model) canWake(r *row) bool {
-	return m.cudaBin != "" && isWindows(r.host) && !r.host.Online && !r.waking
-}
-
-func (m *model) canShutdown(r *row) bool {
-	return m.cudaBin != "" && isWindows(r.host) && r.host.Online && !r.shutting
-}
-
-func isWindows(h discover.Host) bool {
-	return strings.EqualFold(h.OS, "windows")
-}
-
 func localHostname() string {
 	h, err := os.Hostname()
 	if err != nil {
@@ -449,17 +329,3 @@ func localHostname() string {
 	return strings.ToLower(h)
 }
 
-func lastLine(s string) string {
-	lines := strings.Split(strings.TrimSpace(s), "\n")
-	if len(lines) == 0 {
-		return ""
-	}
-	return strings.TrimSpace(lines[len(lines)-1])
-}
-
-func firstNonEmpty(a, b string) string {
-	if strings.TrimSpace(a) != "" {
-		return a
-	}
-	return b
-}

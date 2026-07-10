@@ -41,24 +41,11 @@ func (m *model) View() string {
 		b.WriteString("\n")
 	}
 
-	if m.confirming {
-		if r := m.currentRow(); r != nil {
-			b.WriteString(styleBad.Render(fmt.Sprintf("shut down %s? cuda off self-guards against killing training runs. [y/N] ", r.host.Name)) + "\n")
-		}
-	} else if m.statusMsg != "" {
+	if m.statusMsg != "" {
 		b.WriteString(styleAccent.Render(m.statusMsg) + "\n")
 	}
 
-	help := "q quit · p pause · r refresh · j/k select"
-	if r := m.currentRow(); r != nil {
-		if m.canWake(r) {
-			help += " · " + styleAccent.Render("[w]ake")
-		}
-		if m.canShutdown(r) {
-			help += " · [s]hutdown"
-		}
-	}
-	b.WriteString(styleDim.Render(help) + "\n")
+	b.WriteString(styleDim.Render("q quit · p pause · r refresh · j/k select") + "\n")
 	return b.String()
 }
 
@@ -80,13 +67,7 @@ func (m *model) renderCard(r *row, selected bool) string {
 	case r.status == aggregate.StatusLive && r.stats != nil:
 		lines = append(lines, m.renderStatsLines(r, inner)...)
 	case r.status == aggregate.StatusOffline:
-		hint := "offline"
-		if r.waking {
-			hint = fmt.Sprintf("waking… %ds (cuda on polls until reachable)", int(time.Since(r.wakeStart).Seconds()))
-		} else if m.canWake(r) {
-			hint = "offline — press w to wake"
-		}
-		lines = append(lines, styleDim.Render(hint))
+		lines = append(lines, styleDim.Render("offline (wake outside tailmon: `cuda on`)"))
 	default: // no-agent
 		hint := "online, no agent on :7020 — install tailmon agent on this host"
 		if r.errMsg != "" {
@@ -189,14 +170,8 @@ func renderState(r *row) string {
 	case aggregate.StatusLive:
 		return styleGood.Render("● live")
 	case aggregate.StatusOffline:
-		if r.waking {
-			return styleWarn.Render("◌ waking")
-		}
 		return styleDim.Render("○ offline")
 	default:
-		if r.shutting {
-			return styleWarn.Render("◌ shutting down")
-		}
 		return styleWarn.Render("◌ no agent")
 	}
 }
