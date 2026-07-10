@@ -1,1 +1,0 @@
-"""studiod collector daemon."""
