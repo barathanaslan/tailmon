@@ -44,13 +44,11 @@ func Handler() http.Handler {
 
 // Run starts the agent and blocks until ctx is canceled, then shuts down
 // gracefully. It binds 127.0.0.1:port plus every local Tailscale (CGNAT)
-// address; if no Tailscale address exists it serves loopback only.
+// address. When started at boot (SYSTEM task / launchd) the Tailscale
+// interface may not have its address yet, so if no Tailscale bind succeeds
+// initially, a retry loop keeps trying every 15s and exits after the first
+// success — steady state runs no background work.
 func Run(ctx context.Context, port int) error {
-	addrs := []string{fmt.Sprintf("127.0.0.1:%d", port)}
-	for _, ip := range tailscaleIPs() {
-		addrs = append(addrs, fmt.Sprintf("%s:%d", ip, port))
-	}
-
 	srv := &http.Server{
 		Handler:           Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
@@ -59,29 +57,59 @@ func Run(ctx context.Context, port int) error {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	listeners := make([]net.Listener, 0, len(addrs))
-	var lastBindErr error
-	for _, addr := range addrs {
+	errCh := make(chan error, 8)
+	bound := map[string]bool{}
+	bind := func(addr string) bool {
+		if bound[addr] {
+			return true
+		}
 		ln, err := net.Listen("tcp", addr)
 		if err != nil {
-			lastBindErr = fmt.Errorf("bind %s: %w", addr, err)
 			log.Printf("tailmon agent: cannot bind %s (%v)", addr, err)
-			continue
+			return false
 		}
-		listeners = append(listeners, ln)
-	}
-	if len(listeners) == 0 {
-		return fmt.Errorf("no listenable addresses: %w", lastBindErr)
+		bound[addr] = true
+		log.Printf("tailmon agent %s listening on %s", version.Version, ln.Addr())
+		go func() {
+			if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				select {
+				case errCh <- err:
+				default:
+				}
+			}
+		}()
+		return true
 	}
 
-	errCh := make(chan error, len(listeners))
-	for _, ln := range listeners {
-		log.Printf("tailmon agent %s listening on %s", version.Version, ln.Addr())
-		go func(l net.Listener) {
-			if err := srv.Serve(l); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				errCh <- err
+	bindTailscale := func() bool {
+		ok := false
+		for _, ip := range tailscaleIPs() {
+			if bind(fmt.Sprintf("%s:%d", ip, port)) {
+				ok = true
 			}
-		}(ln)
+		}
+		return ok
+	}
+
+	if !bind(fmt.Sprintf("127.0.0.1:%d", port)) {
+		return fmt.Errorf("cannot bind 127.0.0.1:%d", port)
+	}
+	if !bindTailscale() {
+		log.Printf("tailmon agent: no Tailscale address yet — retrying every 15s")
+		go func() {
+			t := time.NewTicker(15 * time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					if bindTailscale() {
+						return
+					}
+				}
+			}
+		}()
 	}
 
 	select {
