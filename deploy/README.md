@@ -7,7 +7,7 @@ membership is the security perimeter (monitor-only, read-only data).
 | Host | IP | OS | How |
 |---|---|---|---|
 | barathans-macstudio | 100.80.21.79 | macOS | `./build.sh && ./deploy/install-macos.sh` |
-| barathans-5070 | 100.95.91.27 | Windows 11 | see below — needs one manual admin step |
+| barathans-5070 | 100.95.91.27 | Windows 11 | installed 2026-07-10 (SYSTEM task `tailmon-agent`) |
 | barathans-macbook-1 | 100.80.159.96 | macOS | `git pull`, `./build.sh`, `./deploy/install-macos.sh` |
 
 ## macOS (Studio and MacBook)
@@ -39,14 +39,14 @@ Two steps, split on purpose:
    scp dist/tailmon-windows-amd64.exe barat@100.95.91.27:tailmon.exe
    ```
 
-2. **On the PC, by the owner, once**: open an **Administrator** PowerShell and run
-   `deploy\install-windows.ps1` (copy it over, or paste it). It copies
-   `tailmon.exe` to `C:\Tools\tailmon\` and registers a Task Scheduler ONSTART
-   task running as SYSTEM, then starts it.
-
-   Registering the service **cannot be done over ssh** — ssh sessions are not
-   elevated. Until the owner runs the script, `ssh barat@100.95.91.27
-   "tailmon.exe sample"` still works for one-shot checks.
+2. **Run `install-windows.ps1` in an elevated context.** On THIS box, ssh
+   sessions as `barat` carry a full Administrator token (the key lives in
+   `administrators_authorized_keys`), so the install was done remotely:
+   `scp deploy/install-windows.ps1 barat@100.95.91.27:` then
+   `ssh barat@100.95.91.27 "powershell -ExecutionPolicy Bypass -File install-windows.ps1"`.
+   On a box without elevated ssh, run it once in an admin PowerShell locally.
+   Keep the script ASCII-only — PowerShell 5.1 reads BOM-less UTF-8 as ANSI and
+   a stray em-dash breaks parsing.
 
 ## Sanity checks from anywhere on the tailnet
 

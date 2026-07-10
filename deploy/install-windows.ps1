@@ -1,11 +1,12 @@
-# install-windows.ps1 — register the tailmon agent on the Windows box.
+# install-windows.ps1 --- register the tailmon agent on the Windows box.
 #
-# RUN ONCE, MANUALLY, IN AN *ADMIN* POWERSHELL by the machine owner:
+# RUN ONCE in an *elevated* context:
 #   powershell -ExecutionPolicy Bypass -File install-windows.ps1
 #
-# (An ssh session is NOT elevated — this script cannot be run remotely by an
-# automation agent. Dropping tailmon.exe in the home dir is all a remote
-# session should ever do; this script handles the rest.)
+# On barathans-5070, ssh sessions as barat ARE elevated (the key is in
+# administrators_authorized_keys), so this can run remotely over ssh.
+# NOTE: keep this file ASCII-only - PowerShell 5.1 parses BOM-less UTF-8
+# as ANSI and multi-byte characters corrupt string literals.
 #
 # What it does:
 #   1. copies tailmon.exe (from the same directory, or %USERPROFILE%) to C:\Tools\tailmon\
@@ -49,5 +50,5 @@ try {
     $health = Invoke-RestMethod "http://127.0.0.1:7020/health"
     Write-Host "tailmon agent is up: version $($health.version), rss $($health.rss_mb) MB"
 } catch {
-    Write-Warning "agent not answering yet on 127.0.0.1:7020 — check: schtasks /query /tn tailmon-agent"
+    Write-Warning "agent not answering yet on 127.0.0.1:7020 --- check: schtasks /query /tn tailmon-agent"
 }
