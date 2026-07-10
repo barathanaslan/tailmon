@@ -1,92 +1,97 @@
-# Architecture
+# Architecture (v2 — tailmon)
 
-## Components
+## Shape
+
+One Go binary, `tailmon` (module `github.com/barathanaslan/studio-cli`),
+running in two roles on every fleet machine:
 
 ```
-studio-cli/
-  collector/     # Python daemon, runs on Mac Studio as root via launchd
-  cli/           # Python CLI, runs on MacBook, absorbs existing `studio` command
-  menubar/       # SwiftUI menubar app, runs on MacBook
-  shared/        # Python package: API client, pydantic models, auth
-  deploy/        # launchd plist, install scripts, token setup
+┌────────────────────┐        ┌──────────────────────┐
+│ any machine        │        │ each tailnet machine │
+│  tailmon (TUI)     │ HTTP   │  tailmon agent :7020 │
+│  tailmon json ─────┼───────▶│  GET /stats /health  │
+│  (+ local sample   │        │  binds Tailscale IP  │
+│    in-process)     │        │  + 127.0.0.1 only    │
+└────────────────────┘        └──────────────────────┘
 ```
 
-### collector (Mac Studio, root)
+Packages:
 
-- **Language**: Python 3.12+
-- **Framework**: FastAPI + uvicorn (small, well-audited, native async)
-- **Runs as**: root, via a system `launchd` daemon at `/Library/LaunchDaemons/com.bosphorify.studiod.plist`
-- **Binds to**: `127.0.0.1` and the Tailscale interface IP (`100.x.x.x`, discovered via `tailscale status --json` at startup and refreshed periodically)
-- **Auth**: bearer token, read from root-owned `/etc/studiod/token` (mode `0600`). Every authenticated request must present `Authorization: Bearer <token>`.
-
-**Why root?** `powermetrics` (for GPU/power stats) requires root. Running the collector as root avoids sudoers hackery and password prompts. Mitigations: minimal dependency surface, bind only to loopback + Tailscale, bearer-token auth, aggressive input validation on destructive endpoints (`/kill`, `/ssh/kick`), no `shell=True` subprocess calls, no `eval`.
-
-**Endpoints**:
-
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/health` | Liveness ping (unauthenticated) |
-| GET | `/stats` | CPU, memory, GPU, power (current snapshot) |
-| GET | `/processes` | Top N processes by CPU or memory |
-| GET | `/ports` | Listening TCP/UDP ports with owning process |
-| GET | `/ssh/sessions` | Active SSH sessions with Tailscale peer labels |
-| GET | `/tmux/sessions` | tmux sessions (to back the `studio` subcommand) |
-| POST | `/kill` | Send signal to a PID |
-| POST | `/ssh/kick` | Terminate an SSH session by PID |
-| POST | `/tmux/new` | Create a new tmux session |
-
-**Data sources**:
-
-- CPU / memory / processes / network connections: `psutil`
-- GPU utilization, GPU power, CPU package power: `powermetrics` (subprocess, parsed output)
-- Tailscale peer mapping: `tailscale status --json`
-- SSH sessions: `psutil` walks `sshd` process tree, cross-references source IPs against Tailscale peer map to label "which device/friend"
-- tmux: `tmux ls -F` via subprocess
-
-### cli (MacBook)
-
-- **Language**: Python 3.12+
-- **Entry point**: `studio` command, installed via `pip install -e .` into the user's pyenv
-- **Subcommands**: `studio` (default, interactive tmux picker — matches current zsh function behavior), `studio status`, `studio ports`, `studio who`, `studio kill <pid>`, etc.
-- **The existing zsh function in `~/.zshrc:95-140`** gets replaced by a thin shim that calls `python -m studio_cli.cli` so the command name and fzf picker behavior are preserved.
-- **Talks to the collector** via `shared/` HTTP client.
-
-### menubar (MacBook)
-
-- **Language**: Swift / SwiftUI
-- **Entry point**: `StudioMenuBar.app`, installed to `/Applications`, launched at login
-- **API**: macOS 13+ `MenuBarExtra` (user's macOS is current)
-- **UI**:
-  - Menubar icon shows a compact summary (e.g., `42% · 3 ●`)
-  - Click opens a popover with live graphs (CPU / GPU / memory / power), top processes list, listening ports list, SSH sessions list, tmux session shortcuts
-  - Action buttons: kill process, kick session, attach tmux (opens in Terminal)
-- **Polls** the collector every 2–5 seconds via the shared HTTP API (described in JSON schema, Swift reimplements the client)
-
-### shared (Python package)
-
-- Pydantic models for all API responses (source of truth for the JSON schema)
-- HTTP client used by the CLI (menubar app has its own Swift client matching the same schema)
-- Auth token loading (client side: from `~/.config/studio-cli/token`)
-- Configuration: collector host (Tailscale IP or hostname), timeouts
-
-## Communication
-
-- **Transport**: HTTP/1.1 over TCP, JSON payloads
-- **Why not HTTPS?** The traffic already rides on the Tailscale WireGuard tunnel, which is encrypted and authenticated at the network layer. Adding TLS on top is redundant for a single-user setup and complicates cert management.
-- **Why not a unix socket or SSH tunnel?** The menubar app needs to reach the Studio from the MacBook, not run commands on the Studio. HTTP over Tailscale is the cleanest fit.
+| Path | Role |
+|---|---|
+| `cmd/tailmon` | subcommand dispatch: TUI (default), `agent`, `sample`, `json`, `version` |
+| `internal/sample` | one bounded snapshot of the local machine (platform files per OS) |
+| `internal/agent` | HTTP server + single-flight 1s sample cache; soak test lives here |
+| `internal/discover` | `tailscale status --json` → Self + agent-capable peers |
+| `internal/aggregate` | parallel fan-out client used by `tailmon json` and the TUI |
+| `internal/tui` | bubbletea/lipgloss viewer |
+| `deploy/` | launchd plist + install scripts (macOS user agent, Windows schtasks) |
 
 ## Security model
 
-- Attacker must be on the Tailscale network AND know the bearer token to hit authenticated endpoints.
-- Token is generated by the install script, stored root-owned on the Studio and user-owned on the MacBook, never committed to the repo.
-- Destructive endpoints validate PID ranges, check the target process is still alive, and log every call.
-- No arbitrary command execution endpoint — `/kill` takes a pid + signal, not a shell string.
+No root, no bearer tokens. The agent binds **only** to the machine's Tailscale
+CGNAT address(es) and 127.0.0.1. Tailnet membership is the perimeter; the data
+is monitor-only and read-only. (v1 ran a root FastAPI daemon with token auth —
+v2 deliberately needs neither: `ioreg` provides GPU stats unprivileged.)
 
-## Phasing
+## Anti-leak requirements (why v2 exists)
 
-1. **Phase 1 (current plan)**: repo skeleton, `shared/` models, `collector/` daemon with all read endpoints, local test mode, pytest suite. No deployment to Mac Studio yet — collector runs on localhost for development.
-2. **Phase 2**: CLI package, absorb `studio` zsh function, write deploy scripts (launchd plist, install.sh), deploy collector to Mac Studio for the first time.
-3. **Phase 3**: Control endpoints (`/kill`, `/ssh/kick`, `/tmux/new`), CLI subcommands for them.
-4. **Phase 4**: SwiftUI menubar app.
+v1 leaked memory on a MacBook for about ten days. v2's hard rules:
 
-Each phase produces something usable and gets reviewed before the next starts.
+1. The agent samples **on demand** only. `GET /stats` triggers a sample;
+   requests within 1s share one result via a single-flight cache
+   (`internal/agent/cache.go`). No tickers, no history in the agent. Idle
+   agent = 0% CPU, flat RSS.
+2. No unbounded data structures. TUI sparkline history is a fixed
+   120-slot ring buffer per host, allocated once.
+3. `/health` returns the agent's self-stats (`rss_mb`, `goroutines`,
+   `uptime_sec`) and the same block rides along in every `/stats` response.
+4. `internal/agent/soak_test.go` hammers /stats 5,000 times in-process and
+   fails the build if RSS grows ≥10 MB or goroutines don't return to
+   baseline. Part of plain `go test ./...`.
+5. The TUI probes agentless hosts on a 10s backoff, uses 800ms request
+   timeouts, and holds a per-host in-flight guard so retries never stack.
+   Quit cancels the program context, which kills any spawned `cuda on/off`.
+6. Binaries built `-trimpath -ldflags "-s -w"`, `CGO_ENABLED=0`.
+
+## Data sources
+
+- CPU / mem / swap / disks / net counters / processes / uptime:
+  `gopsutil/v4`, pure Go on all three OSes.
+- System CPU% and per-process CPU% share one 500 ms measurement window per
+  sample (prime → sleep → read deltas), so a sample costs ~0.5-1 s wall and
+  nothing when nobody asks.
+- macOS memory: `used = total − available` (Activity Monitor semantics);
+  pressure from `memory_pressure -Q` free-percentage buckets (>20 normal,
+  10-20 warn, <10 critical).
+- macOS GPU: `ioreg -r -d 1 -c IOAccelerator` → `PerformanceStatistics` →
+  `"Device Utilization %"`. No root. Absent key → `util_pct: null`.
+  Unified memory → `vram_*: null`. GPU name from
+  `sysctl machdep.cpu.brand_string`.
+- Windows GPU: `nvidia-smi --query-gpu=… --format=csv,noheader,nounits`,
+  trying PATH, then `C:\Windows\System32`, then the NVSMI folder.
+- Linux GPU: `nvidia-smi` from PATH if present. WSL is not a target — the
+  Windows agent runs native and sees the real host.
+- Every subprocess: 2 s `context.WithTimeout`, stdin from the null device,
+  reaped by `cmd.Run`/`Output`.
+
+## Discovery & degradation
+
+`tailscale status --json` (PATH, falling back to the macOS app-bundle binary).
+Self + peers filtered to OSes that could run an agent (macOS/windows/linux —
+phones and OS-less shared-in devices are skipped). Peers marked
+live / no-agent / offline by Online flag + a :7020 probe. If the tailscale CLI
+is missing entirely, `tailmon` monitors localhost only (local sampling is
+in-process and never depends on the agent or tailscale).
+
+## The CUDA box affordance
+
+`barathans-5070` (Windows, RTX 5070 Ti) is usually powered off. When the TUI's
+selected host is an offline Windows machine and `~/bin/cuda` exists locally,
+`w` runs `cuda on` (WoL + poll) asynchronously; `s` behind a y/N confirm runs
+`cuda off`, which itself refuses to shut down a busy GPU.
+
+## Ports
+
+7020. (7012 voice-recorder UI, 7013 whisper-service, 8765 v1 studiod are taken
+in this household.)

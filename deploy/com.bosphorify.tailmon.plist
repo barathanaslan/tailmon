@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- User LaunchAgent — NOT root, NOT a LaunchDaemon. tailmon needs no
+         privileges: ioreg GPU stats work unprivileged and the agent binds
+         only to the Tailscale IP + loopback. __HOME__ is substituted by
+         install-macos.sh. -->
+    <key>Label</key>
+    <string>com.bosphorify.tailmon</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/bin/tailmon</string>
+        <string>agent</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/tailmon-agent.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/tailmon-agent.log</string>
+</dict>
+</plist>
