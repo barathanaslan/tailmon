@@ -6,8 +6,24 @@ live CPU / RAM / GPU / disk usage of that machine **and** every online tailnet
 peer — in a TUI for humans, or as one JSON document for AI tools.
 
 (The repo is still named `studio-cli` for history's sake; the v1 Python
-collector/CLI/menubar stack lives on the `v1-python` branch. `menubar/` is a
-dormant v1 leftover — see `menubar/STATUS.md`.)
+collector/CLI/menubar stack lives on the `v1-python` branch.)
+
+## Tailmon.app — the menu bar monitor (macOS)
+
+`menubar/` is a SwiftUI menu bar app on top of the same agents — the Stats.app
+replacement. The menu bar label shows the local machine's live CPU% and memory
+(with a pressure marker); the dropdown shows every tailnet host with full
+stats **and a top-processes list per host** ("what is actually running").
+Strictly read-only: no power controls, no kill — by owner rule.
+
+Efficiency contract: menu closed → one localhost poll per 15s for the label,
+zero subprocess spawns. Menu open → `tailmon json --top 10` every 3s, one in
+flight max. No history kept; log capped at 1 MB.
+
+```
+cd menubar && ./install.sh     # builds Tailmon.app, installs to /Applications
+```
+Enable "Launch at login" from the dropdown footer.
 
 ## Design rules
 

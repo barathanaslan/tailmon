@@ -1,7 +1,0 @@
-{
-  "cpu": {
-    "percent_total": "not-a-number",
-    "percent_per_core": [],
-    "load_avg": [0,0,0]
-  }
-}

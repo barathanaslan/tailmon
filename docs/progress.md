@@ -310,3 +310,36 @@ no tokens. Deps: gopsutil/v4, bubbletea v1.3.10, lipgloss v1.1.0, stdlib.
 admin (owner, once); install on the MacBook when it comes online (`git pull &&
 ./build.sh && ./deploy/install-macos.sh`); rework `menubar/` against the v2
 agent (see `menubar/STATUS.md`).
+
+---
+
+## 2026-07-10 (late) — agents everywhere, boot-race fix, Tailmon.app
+
+- Windows agent installed as a SYSTEM ONSTART task over elevated ssh (barat's
+  key is in administrators_authorized_keys — discovered tonight; the ps1's
+  "ssh is not elevated" assumption was wrong). PS 5.1 needs ASCII-only ps1.
+- **Boot race found and fixed**: at Windows boot the agent started before the
+  Tailscale interface had its IP and bound loopback-only forever (netstat
+  after a power cycle proved it). agent.Run now retries the Tailscale bind
+  every 15s until first success, then stops. Verified: cold boot → answering
+  on the Tailscale IP in ~10s, pre-login.
+- MacBook fully deployed (Go agent via launchd + PATH fix in .zshrc).
+- TUI: wake/shutdown keys removed entirely — owner rule: monitoring tools must
+  not control power; `cuda on/off` in a shell is the only path.
+- `/stats?top=N` (clamp 1..25) + `sample/json --top` + `command` field on
+  top_procs. Cache samples once at max depth; handler trims per request.
+- **Tailmon.app** (menubar/ rewritten, SwiftUI, macOS 13+ MenuBarExtra):
+  label = local CPU% + mem + pressure mark; dropdown = per-host cards with
+  top-processes lists (the "what runs" insight). Read-only by design. Menu
+  closed = one localhost poll/15s, zero spawns (verified: 60s pgrep watch, 0
+  violations); menu open = `tailmon json --top 10`/3s, single-flight.
+  Installed and running on Studio + MacBook. Fixture-based decode tests.
+  Deviation: idle RSS 74.5 MB vs the 50 MB plan target — SwiftUI baseline;
+  still far under Stats.app. Trim later if it bothers.
+- The first menubar build agent stalled 10 min in with only the sampler diff
+  done; the rest was implemented directly in the main session.
+
+**Still to do:** owner clicks through Tailmon.app in the morning (layout
+verification is visual); Windows box gets the ?top= agent whenever it's next
+on (`scp dist/tailmon-windows-amd64.exe` + task restart, or just ask); decide
+repo rename; later phases: ports/ssh/tmux insight, Windows tray.

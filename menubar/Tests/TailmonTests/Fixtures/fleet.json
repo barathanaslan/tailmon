@@ -1,0 +1,323 @@
+{
+ "schema": 1,
+ "generated_at": "2026-07-10T19:56:24.085695Z",
+ "hosts": [
+  {
+   "host": "barathans-macstudio",
+   "ip": "100.80.21.79",
+   "os": "macOS",
+   "status": "live",
+   "source": "local",
+   "stats": {
+    "schema": 1,
+    "host": "barathans-macstudio",
+    "os": "darwin",
+    "arch": "arm64",
+    "sampled_at": "2026-07-10T19:56:23.450167Z",
+    "uptime_sec": 780122,
+    "cpu": {
+     "percent": 0.8,
+     "cores": 28,
+     "load1": 1.5
+    },
+    "mem": {
+     "total_mb": 98304,
+     "used_mb": 11778,
+     "available_mb": 86525,
+     "pressure": "normal",
+     "swap_used_mb": 2412
+    },
+    "gpu": [
+     {
+      "name": "Apple M3 Ultra",
+      "util_pct": 0,
+      "vram_used_mb": null,
+      "vram_total_mb": null,
+      "temp_c": null
+     }
+    ],
+    "disks": [
+     {
+      "mount": "/",
+      "free_gb": 209.1,
+      "total_gb": 926.4
+     }
+    ],
+    "net": {
+     "rx_bytes": 212047907987,
+     "tx_bytes": 56060808426
+    },
+    "top_procs": [
+     {
+      "pid": 59639,
+      "name": "python3.13",
+      "cpu_pct": 3,
+      "mem_mb": 16.2,
+      "command": "/Users/barathanaslan/.pyenv/versions/3.13.9/bin/python3 -c import json, sys d = json.load(sys.stdin\u2026"
+     },
+     {
+      "pid": 59638,
+      "name": "tailmon",
+      "cpu_pct": 3,
+      "mem_mb": 17,
+      "command": "/Users/barathanaslan/bin/tailmon json --top 10"
+     },
+     {
+      "pid": 33727,
+      "name": "claude",
+      "cpu_pct": 2,
+      "mem_mb": 545.9,
+      "command": "/Users/barathanaslan/Library/Application Support/Claude/claude-code/2.1.205/claude.app/Contents/Mac\u2026"
+     },
+     {
+      "pid": 2187,
+      "name": "beam.smp",
+      "cpu_pct": 0.6,
+      "mem_mb": 84.1,
+      "command": "/opt/homebrew/Cellar/couchdb/3.5.1/bin/../erts-16.2/bin/beam.smp -P 1048576 -SDio 16 -zdbbl 32768 -\u2026"
+     },
+     {
+      "pid": 84430,
+      "name": "SafariBookmarksSyncAgent",
+      "cpu_pct": 0.6,
+      "mem_mb": 19.5,
+      "command": "/System/Cryptexes/App/usr/libexec/SafariBookmarksSyncAgent"
+     },
+     {
+      "pid": 1572,
+      "name": "WallpaperAerialsExtension",
+      "cpu_pct": 0.5,
+      "mem_mb": 111.4,
+      "command": "/System/Library/ExtensionKit/Extensions/WallpaperAerialsExtension.appex/Contents/MacOS/WallpaperAer\u2026"
+     },
+     {
+      "pid": 89617,
+      "name": "Claude",
+      "cpu_pct": 0.3,
+      "mem_mb": 347.5,
+      "command": "/Applications/Claude.app/Contents/MacOS/Claude"
+     },
+     {
+      "pid": 75098,
+      "name": "Code Helper",
+      "cpu_pct": 0.2,
+      "mem_mb": 62.3,
+      "command": "/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper.app/Contents/MacOS/Code Helper\u2026"
+     },
+     {
+      "pid": 1067,
+      "name": "fileproviderd",
+      "cpu_pct": 0.2,
+      "mem_mb": 21.9,
+      "command": "/System/Library/PrivateFrameworks/FileProvider.framework/Support/fileproviderd"
+     },
+     {
+      "pid": 84383,
+      "name": "com.apple.geod",
+      "cpu_pct": 0.1,
+      "mem_mb": 16.7,
+      "command": "/System/Library/PrivateFrameworks/GeoServices.framework/Versions/A/XPCServices/com.apple.geod.xpc/C\u2026"
+     }
+    ],
+    "agent": {
+     "version": "0.2.0",
+     "rss_mb": 17.4,
+     "goroutines": 3,
+     "uptime_sec": 0
+    }
+   }
+  },
+  {
+   "host": "barathans-5070",
+   "ip": "100.95.91.27",
+   "os": "windows",
+   "status": "live",
+   "stats": {
+    "schema": 1,
+    "host": "barathans-5070",
+    "os": "windows",
+    "arch": "amd64",
+    "sampled_at": "2026-07-10T19:05:00Z",
+    "uptime_sec": 1200,
+    "cpu": {
+     "percent": 3.1,
+     "cores": 24,
+     "load1": null
+    },
+    "mem": {
+     "total_mb": 64673,
+     "used_mb": 4910,
+     "available_mb": 59763,
+     "pressure": null,
+     "swap_used_mb": 0
+    },
+    "gpu": [
+     {
+      "name": "NVIDIA GeForce RTX 5070 Ti",
+      "util_pct": 0,
+      "vram_used_mb": 176,
+      "vram_total_mb": 16303,
+      "temp_c": 34
+     }
+    ],
+    "disks": [
+     {
+      "mount": "C:",
+      "free_gb": 599,
+      "total_gb": 931
+     },
+     {
+      "mount": "E:",
+      "free_gb": 3156,
+      "total_gb": 3815
+     }
+    ],
+    "net": {
+     "rx_bytes": 1000,
+     "tx_bytes": 2000
+    },
+    "top_procs": [
+     {
+      "pid": 3320,
+      "name": "tailmon.exe",
+      "cpu_pct": 0.1,
+      "mem_mb": 48.5,
+      "command": "C:\\Tools\\tailmon\\tailmon.exe agent"
+     }
+    ],
+    "agent": {
+     "version": "0.2.0",
+     "rss_mb": 48.5,
+     "goroutines": 8,
+     "uptime_sec": 1100
+    }
+   },
+   "source": "agent"
+  },
+  {
+   "host": "barathan\u2019s macbook",
+   "ip": "100.80.159.96",
+   "os": "macOS",
+   "status": "live",
+   "source": "agent",
+   "stats": {
+    "schema": 1,
+    "host": "barathans-macbook",
+    "os": "darwin",
+    "arch": "arm64",
+    "sampled_at": "2026-07-10T19:56:24.122013Z",
+    "uptime_sec": 783732,
+    "cpu": {
+     "percent": 0,
+     "cores": 8,
+     "load1": 1.1
+    },
+    "mem": {
+     "total_mb": 16384,
+     "used_mb": 6106,
+     "available_mb": 10277,
+     "pressure": "normal",
+     "swap_used_mb": 0
+    },
+    "gpu": [
+     {
+      "name": "Apple M3",
+      "util_pct": 28,
+      "vram_used_mb": null,
+      "vram_total_mb": null,
+      "temp_c": null
+     }
+    ],
+    "disks": [
+     {
+      "mount": "/",
+      "free_gb": 210.9,
+      "total_gb": 460.4
+     }
+    ],
+    "net": {
+     "rx_bytes": 51486166517,
+     "tx_bytes": 8432624552
+    },
+    "top_procs": [
+     {
+      "pid": 87035,
+      "name": "tailmon",
+      "cpu_pct": 2.9,
+      "mem_mb": 19.2,
+      "command": "/Users/barathanaslan/bin/tailmon agent"
+     },
+     {
+      "pid": 1478,
+      "name": "logioptionsplus_agent",
+      "cpu_pct": 0.4,
+      "mem_mb": 114.5,
+      "command": "/Library/Application Support/Logitech.localized/LogiOptionsPlus/logioptionsplus_agent.app/Contents/\u2026"
+     },
+     {
+      "pid": 1475,
+      "name": "ChatGPTHelper",
+      "cpu_pct": 0.2,
+      "mem_mb": 44.3,
+      "command": "Contents/Resources/ChatGPTHelper"
+     },
+     {
+      "pid": 1158,
+      "name": "fileproviderd",
+      "cpu_pct": 0.1,
+      "mem_mb": 22,
+      "command": "/System/Library/PrivateFrameworks/FileProvider.framework/Support/fileproviderd"
+     },
+     {
+      "pid": 1737,
+      "name": "SafariBookmarksSyncAgent",
+      "cpu_pct": 0,
+      "mem_mb": 18.6,
+      "command": "/System/Cryptexes/App/usr/libexec/SafariBookmarksSyncAgent"
+     },
+     {
+      "pid": 44344,
+      "name": "Cloudflare WARP",
+      "cpu_pct": 0,
+      "mem_mb": 77.5,
+      "command": "/Applications/Cloudflare WARP.app/Contents/MacOS/Cloudflare WARP"
+     },
+     {
+      "pid": 1247,
+      "name": "ControlCenter",
+      "cpu_pct": 0,
+      "mem_mb": 89.4,
+      "command": "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter"
+     },
+     {
+      "pid": 1286,
+      "name": "duetexpertd",
+      "cpu_pct": 0,
+      "mem_mb": 65.8,
+      "command": "/usr/libexec/duetexpertd"
+     },
+     {
+      "pid": 1476,
+      "name": "askpermissiond",
+      "cpu_pct": 0,
+      "mem_mb": 9.9,
+      "command": "/System/Library/PrivateFrameworks/AskPermission.framework/Versions/A/Resources/askpermissiond"
+     },
+     {
+      "pid": 2915,
+      "name": "naturallanguaged",
+      "cpu_pct": 0,
+      "mem_mb": 19.8,
+      "command": "/usr/libexec/naturallanguaged"
+     }
+    ],
+    "agent": {
+     "version": "0.2.0",
+     "rss_mb": 19.3,
+     "goroutines": 7,
+     "uptime_sec": 199
+    }
+   }
+  }
+ ]
+}
