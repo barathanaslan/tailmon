@@ -1,7 +1,7 @@
-# Go build artifacts
+# Go build artifacts (root-anchored — a bare "tailmon" would ignore cmd/tailmon/)
 dist/
-tailmon
-tailmon.exe
+/tailmon
+/tailmon.exe
 *.test
 *.out
 
