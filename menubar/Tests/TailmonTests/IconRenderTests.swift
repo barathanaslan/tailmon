@@ -11,8 +11,8 @@ final class IconRenderTests: XCTestCase {
         let info = IconInfo(
             cpu: 5, gpu: 11, ram: 20, pressure: "normal",
             peers: [
-                PeerBadge(letter: "5", status: .offline),
-                PeerBadge(letter: "M", status: .live),
+                PeerBadge(letter: "B5", status: .offline),
+                PeerBadge(letter: "BM", status: .live),
             ])
         let img = IconRenderer.render(info)
         XCTAssertGreaterThan(img.size.width, 40)

@@ -49,10 +49,11 @@ final class DecodeTests: XCTestCase {
     }
 
     func testBadgeLetters() {
-        XCTAssertEqual(IconInfo.badgeLetter(for: "barathans-5070"), "5")
-        XCTAssertEqual(IconInfo.badgeLetter(for: "barathan\u{2019}s macbook"), "M")
-        XCTAssertEqual(IconInfo.badgeLetter(for: "barathan's macbook"), "M")
-        XCTAssertEqual(IconInfo.badgeLetter(for: "some-new-box"), "S")
+        XCTAssertEqual(IconInfo.badgeLetter(for: "barathans-5070"), "B5")
+        XCTAssertEqual(IconInfo.badgeLetter(for: "barathan\u{2019}s macbook"), "BM")
+        XCTAssertEqual(IconInfo.badgeLetter(for: "barathan's macbook"), "BM")
+        XCTAssertEqual(IconInfo.badgeLetter(for: "some-new-box"), "SNB")
+        XCTAssertEqual(IconInfo.badgeLetter(for: "nothing-phone-3a"), "NP3")
     }
 
     func testHumanDuration() {

@@ -32,13 +32,21 @@ struct IconInfo: Equatable {
             peers: peers)
     }
 
+    // Generic initials, no owner-specific assumptions: split the hostname on
+    // separators and take each word's first character, capped at 3.
+    // "barathans-5070" -> B5, "barathan's macbook" -> BM, "nothing-phone-3a" -> NP3.
     static func badgeLetter(for host: String) -> String {
-        var h = host.lowercased()
-        for p in ["barathans-", "barathan's ", "barathan\u{2019}s "] where h.hasPrefix(p) {
-            h = String(h.dropFirst(p.count))
+        let separators = CharacterSet(charactersIn: " -_.")
+        let words = host
+            .replacingOccurrences(of: "'s", with: "")
+            .replacingOccurrences(of: "\u{2019}s", with: "")
+            .components(separatedBy: separators)
+            .filter { !$0.isEmpty }
+        let initials = words.prefix(3).compactMap { w in
+            w.first(where: { $0.isLetter || $0.isNumber }).map(String.init)
         }
-        let first = h.first(where: { $0.isLetter || $0.isNumber }).map(String.init) ?? "?"
-        return first.uppercased()
+        guard !initials.isEmpty else { return "?" }
+        return initials.joined().uppercased()
     }
 }
 
@@ -55,13 +63,16 @@ enum IconRenderer {
         if let g = info.gpu { columns.append(("GPU", pct(g), nil)) }
         columns.append(("RAM", pct(info.ram), ramColor(info.pressure)))
 
-        let titleFont = NSFont.systemFont(ofSize: 7, weight: .semibold)
-        let valueFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .bold)
-        let letterFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .heavy)
+        // Stats-like: larger, lighter values; small medium-weight titles.
+        // Everything draws on integer pixel positions — fractional origins
+        // are what made the first version look blurry on non-Retina backing.
+        let titleFont = NSFont.systemFont(ofSize: 8, weight: .medium)
+        let valueFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        let letterFont = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
 
         // Measure. Dynamic colors are applied at draw time (appearance-aware).
         func width(_ s: String, _ f: NSFont) -> CGFloat {
-            (s as NSString).size(withAttributes: [.font: f]).width
+            ceil((s as NSString).size(withAttributes: [.font: f]).width)
         }
         let colWidths = columns.map { max(width($0.0, titleFont), width($0.1, valueFont)) }
         var total = colWidths.reduce(0, +) + columnGap * CGFloat(max(0, columns.count - 1))
@@ -83,8 +94,8 @@ enum IconRenderer {
                 let valueAttrs: [NSAttributedString.Key: Any] = [
                     .font: valueFont, .foregroundColor: tint ?? NSColor.labelColor,
                 ]
-                draw(title, titleAttrs, centerIn: w, x: x, y: 12.5)
-                draw(value, valueAttrs, centerIn: w, x: x, y: 1.5)
+                draw(title, titleAttrs, centerIn: w, x: x, y: 14)
+                draw(value, valueAttrs, centerIn: w, x: x, y: 0)
                 x += w + columnGap
             }
             if !info.peers.isEmpty {
@@ -93,9 +104,9 @@ enum IconRenderer {
                     let attrs: [NSAttributedString.Key: Any] = [
                         .font: letterFont, .foregroundColor: color(for: p.status),
                     ]
-                    let w = (p.letter as NSString).size(withAttributes: attrs).width
+                    let w = width(p.letter, letterFont)
                     (p.letter as NSString).draw(
-                        at: NSPoint(x: x, y: (height - 13) / 2), withAttributes: attrs)
+                        at: NSPoint(x: x, y: 5), withAttributes: attrs)
                     x += w + peerGap
                 }
             }
@@ -130,6 +141,7 @@ enum IconRenderer {
         centerIn w: CGFloat, x: CGFloat, y: CGFloat
     ) {
         let sw = (s as NSString).size(withAttributes: attrs).width
-        (s as NSString).draw(at: NSPoint(x: x + (w - sw) / 2, y: y), withAttributes: attrs)
+        let px = (x + (w - sw) / 2).rounded() // integer pixels: no blur at 1x
+        (s as NSString).draw(at: NSPoint(x: px, y: y), withAttributes: attrs)
     }
 }
