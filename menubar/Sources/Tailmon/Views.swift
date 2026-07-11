@@ -159,28 +159,45 @@ struct StatsRows: View {
         }
     }
 
-    private func gpuRow(_ g: Stats.GPU) -> some View {
-        HStack(spacing: 6) {
-            Text("GPU").frame(width: 30, alignment: .leading).foregroundStyle(.secondary)
-            Text(gpuDetail(g)).monospacedDigit()
-            Spacer()
+    @ViewBuilder private func gpuRow(_ g: Stats.GPU) -> some View {
+        if let u = g.utilPct {
+            meter("GPU", u, detail: gpuDetail(g), tint: .purple)
+        } else {
+            HStack(spacing: 6) {
+                Text("GPU").frame(width: 30, alignment: .leading).foregroundStyle(.secondary)
+                Text(shortGPUName(g.name)).monospacedDigit()
+                Text("util n/a").foregroundStyle(.secondary)
+                Spacer()
+            }
         }
     }
 
     private func gpuDetail(_ g: Stats.GPU) -> String {
-        var d = g.name
-        if let u = g.utilPct { d += String(format: " %.0f%%", u) }
+        var d = String(format: "%.0f%% %@", g.utilPct ?? 0, shortGPUName(g.name))
         if let used = g.vramUsedMb, let total = g.vramTotalMb {
-            d += String(format: " · VRAM %.1f/%.1fG", Double(used) / 1024, Double(total) / 1024)
+            d += String(format: " · %.1f/%.0fG", Double(used) / 1024, Double(total) / 1024)
         }
         if let t = g.tempC { d += String(format: " · %.0f°C", t) }
         return d
     }
 
+    private func shortGPUName(_ name: String) -> String {
+        var n = name
+        for p in ["NVIDIA GeForce ", "NVIDIA ", "AMD Radeon ", "Apple "] where n.hasPrefix(p) {
+            n = String(n.dropFirst(p.count))
+        }
+        return n
+    }
+
     private var miscRow: some View {
         HStack(spacing: 6) {
-            if let disk = stats.disks?.first {
-                Text(String(format: "Disk %@ %.0fG free", disk.mount, disk.freeGb))
+            if let disks = stats.disks, !disks.isEmpty {
+                // Every volume, e.g. "Disk C: 598G · E: 3156G free". Free space
+                // is one statfs-style syscall per mount — never a scan.
+                Text("Disk "
+                    + disks.prefix(3).map { String(format: "%@ %.0fG", $0.mount, $0.freeGb) }
+                        .joined(separator: " · ")
+                    + " free")
             }
             Spacer()
             if let rss = stats.agent?.rssMb {

@@ -136,8 +136,14 @@ func (m *model) renderStatsLines(r *row, inner int) []string {
 	// Disk (main volume) + the agent's own footprint (leak watch, dim).
 	misc := ""
 	if len(s.Disks) > 0 {
-		d := s.Disks[0]
-		misc = fmt.Sprintf("Disk %s %.0fG free of %.0fG", d.Mount, d.FreeGB, d.TotalGB)
+		parts := make([]string, 0, 3)
+		for i, d := range s.Disks {
+			if i == 3 {
+				break
+			}
+			parts = append(parts, fmt.Sprintf("%s %.0fG", d.Mount, d.FreeGB))
+		}
+		misc = "Disk " + strings.Join(parts, " · ") + " free"
 	}
 	misc += styleDim.Render(fmt.Sprintf("   agent %.1fMB · %d goroutines", s.Agent.RSSMB, s.Agent.Goroutines))
 	lines = append(lines, misc)
