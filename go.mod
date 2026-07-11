@@ -1,4 +1,4 @@
-module github.com/barathanaslan/studio-cli
+module github.com/barathanaslan/tailmon
 
 go 1.26.5
 

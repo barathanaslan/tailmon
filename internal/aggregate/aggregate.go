@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/barathanaslan/studio-cli/internal/agent"
-	"github.com/barathanaslan/studio-cli/internal/discover"
-	"github.com/barathanaslan/studio-cli/internal/sample"
+	"github.com/barathanaslan/tailmon/internal/agent"
+	"github.com/barathanaslan/tailmon/internal/discover"
+	"github.com/barathanaslan/tailmon/internal/sample"
 )
 
 // RequestTimeout bounds each per-host /stats request (plan: 800ms).

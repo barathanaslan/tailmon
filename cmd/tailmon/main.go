@@ -17,11 +17,11 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/barathanaslan/studio-cli/internal/agent"
-	"github.com/barathanaslan/studio-cli/internal/aggregate"
-	"github.com/barathanaslan/studio-cli/internal/sample"
-	"github.com/barathanaslan/studio-cli/internal/tui"
-	"github.com/barathanaslan/studio-cli/internal/version"
+	"github.com/barathanaslan/tailmon/internal/agent"
+	"github.com/barathanaslan/tailmon/internal/aggregate"
+	"github.com/barathanaslan/tailmon/internal/sample"
+	"github.com/barathanaslan/tailmon/internal/tui"
+	"github.com/barathanaslan/tailmon/internal/version"
 )
 
 const usage = `tailmon — tailnet-wide resource monitor

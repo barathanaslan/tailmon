@@ -7,8 +7,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/barathanaslan/studio-cli/internal/aggregate"
-	"github.com/barathanaslan/studio-cli/internal/version"
+	"github.com/barathanaslan/tailmon/internal/aggregate"
+	"github.com/barathanaslan/tailmon/internal/version"
 )
 
 var (

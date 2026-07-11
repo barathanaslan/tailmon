@@ -5,8 +5,8 @@ tailnet is both a stats source and a viewer. From any machine you can see the
 live CPU / RAM / GPU / disk usage of that machine **and** every online tailnet
 peer — in a TUI for humans, or as one JSON document for AI tools.
 
-(The repo is still named `studio-cli` for history's sake; the v1 Python
-collector/CLI/menubar stack lives on the `v1-python` branch.)
+(Formerly `studio-cli` — renamed 2026-07-11; GitHub redirects the old URL.
+The v1 Python collector/CLI/menubar stack lives on the `v1-python` branch.)
 
 ## Tailmon.app — the menu bar monitor (macOS)
 

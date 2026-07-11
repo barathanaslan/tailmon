@@ -180,7 +180,7 @@ final class FleetModel: ObservableObject {
     private func refreshFleet() {
         guard !fleetInFlight else { return }
         guard let bin = tailmonPath else {
-            fleetError = "tailmon binary not found in ~/bin — run studio-cli/deploy/install-macos.sh"
+            fleetError = "tailmon binary not found in ~/bin — run ~/tailmon/deploy/install-macos.sh"
             return
         }
         fleetInFlight = true

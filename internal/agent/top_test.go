@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/barathanaslan/studio-cli/internal/sample"
+	"github.com/barathanaslan/tailmon/internal/sample"
 )
 
 // TestStatsTopParam: one cached max-depth sample must serve any ?top=N —

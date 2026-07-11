@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/barathanaslan/studio-cli/internal/sample"
+	"github.com/barathanaslan/tailmon/internal/sample"
 )
 
 // sampleTTL: concurrent /stats requests within this window share one sample.

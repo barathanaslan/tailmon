@@ -22,7 +22,7 @@ import (
 	gnet "github.com/shirou/gopsutil/v4/net"
 	"github.com/shirou/gopsutil/v4/process"
 
-	"github.com/barathanaslan/studio-cli/internal/version"
+	"github.com/barathanaslan/tailmon/internal/version"
 )
 
 // SchemaVersion is bumped whenever the JSON shape changes incompatibly.

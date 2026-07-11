@@ -17,10 +17,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/barathanaslan/studio-cli/internal/agent"
-	"github.com/barathanaslan/studio-cli/internal/aggregate"
-	"github.com/barathanaslan/studio-cli/internal/discover"
-	"github.com/barathanaslan/studio-cli/internal/sample"
+	"github.com/barathanaslan/tailmon/internal/agent"
+	"github.com/barathanaslan/tailmon/internal/aggregate"
+	"github.com/barathanaslan/tailmon/internal/discover"
+	"github.com/barathanaslan/tailmon/internal/sample"
 )
 
 const (

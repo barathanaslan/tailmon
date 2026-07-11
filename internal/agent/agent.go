@@ -16,8 +16,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/barathanaslan/studio-cli/internal/sample"
-	"github.com/barathanaslan/studio-cli/internal/version"
+	"github.com/barathanaslan/tailmon/internal/sample"
+	"github.com/barathanaslan/tailmon/internal/version"
 )
 
 // DefaultPort: 7020 (7012/7013/8765 are taken by other services here).
