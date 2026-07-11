@@ -34,13 +34,25 @@ final class DecodeTests: XCTestCase {
         XCTAssertEqual(winStats.topProcs?.first?.command, #"C:\Tools\tailmon\tailmon.exe agent"#)
     }
 
-    func testIconLabel() throws {
+    func testIconInfo() throws {
         let report = try tailmonJSONDecoder().decode(Report.self, from: loadFixture())
         let s = try XCTUnwrap(report.hosts.first { $0.host == "barathans-macstudio" }?.stats)
-        let label = FleetModel.iconLabel(for: s)
-        // "NN% MMG" shape, no pressure marker under normal pressure.
-        XCTAssertTrue(label.contains("%"), label)
-        XCTAssertTrue(label.hasSuffix("G"), label)
+        let info = IconInfo.make(stats: s, peers: [])
+        XCTAssertNotNil(info.cpu)
+        let ram = try XCTUnwrap(info.ram)
+        let expected = Int((100 * Double(s.mem.usedMb) / Double(s.mem.totalMb)).rounded())
+        XCTAssertEqual(ram, expected)
+        // No stats at all -> all nil, renderer shows dashes.
+        let empty = IconInfo.make(stats: nil, peers: [])
+        XCTAssertNil(empty.cpu)
+        XCTAssertNil(empty.ram)
+    }
+
+    func testBadgeLetters() {
+        XCTAssertEqual(IconInfo.badgeLetter(for: "barathans-5070"), "5")
+        XCTAssertEqual(IconInfo.badgeLetter(for: "barathan\u{2019}s macbook"), "M")
+        XCTAssertEqual(IconInfo.badgeLetter(for: "barathan's macbook"), "M")
+        XCTAssertEqual(IconInfo.badgeLetter(for: "some-new-box"), "S")
     }
 
     func testHumanDuration() {

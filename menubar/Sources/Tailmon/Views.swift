@@ -1,7 +1,6 @@
 // The dropdown: the Stats replacement. Per-host cards with full stats AND the
 // top-processes list ("what is actually running") — the insight the TUI lacks.
 // Read-only by design: no power controls, no kill. Owner rule (2026-07-10).
-import ServiceManagement
 import SwiftUI
 
 struct FleetView: View {
@@ -41,7 +40,9 @@ struct FleetView: View {
 
     private var footer: some View {
         HStack {
-            LaunchAtLoginToggle()
+            // Launch-at-login is on by default (registered on first launch);
+            // manage it in System Settings > General > Login Items if needed.
+            Text("starts at login").foregroundStyle(.tertiary)
             Spacer()
             Button("Quit") { NSApplication.shared.terminate(nil) }
                 .buttonStyle(.plain)
@@ -209,34 +210,6 @@ struct StatsRows: View {
                 .padding(.top, 2)
             } label: {
                 Text("processes").foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
-struct LaunchAtLoginToggle: View {
-    @State private var enabled = SMAppService.mainApp.status == .enabled
-    @State private var errorText: String?
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Toggle("Launch at login", isOn: $enabled)
-                .toggleStyle(.checkbox)
-                .onChange(of: enabled) { newValue in
-                    do {
-                        if newValue {
-                            try SMAppService.mainApp.register()
-                        } else {
-                            try SMAppService.mainApp.unregister()
-                        }
-                        errorText = nil
-                    } catch {
-                        errorText = error.localizedDescription
-                        enabled = SMAppService.mainApp.status == .enabled
-                    }
-                }
-            if let e = errorText {
-                Text(e).foregroundStyle(.orange).lineLimit(1)
             }
         }
     }

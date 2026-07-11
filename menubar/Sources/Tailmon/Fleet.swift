@@ -1,16 +1,19 @@
 // FleetModel drives the whole app. Efficiency contract (owner requirement):
 // while the menu is CLOSED the only activity is one localhost URLSession poll
-// every 15s for the menu-bar label — zero subprocess spawns. Fleet queries
-// (spawning `tailmon json`) happen only while the menu is OPEN, every 3s, one
-// in flight at most. No history is kept: latest snapshot only.
+// plus up to a handful of tiny /health probes to known peers every 15s for
+// the menu-bar label — ZERO subprocess spawns. Fleet queries (spawning
+// `tailmon json`) happen only while the menu is OPEN, every 3s, one in
+// flight at most. No history is kept: latest snapshot only.
 //
 // NO power controls anywhere in this app — owner rule (2026-07-10).
+import AppKit
 import Foundation
+import ServiceManagement
 import SwiftUI
 
 @MainActor
 final class FleetModel: ObservableObject {
-    @Published var iconText = "…"
+    @Published var iconImage: NSImage?
     @Published var report: Report?
     @Published var fleetError: String?
     @Published var menuOpen = false {
@@ -19,12 +22,20 @@ final class FleetModel: ObservableObject {
 
     private var timer: Timer?
     private var fleetInFlight = false
+    private var iconInFlight = false
     private let session: URLSession
     private let tailmonPath: String?
     private let log = CappedLog(name: "tailmon-menubar")
 
+    // Peers learned from the last successful fleet fetch, persisted so the
+    // label can show device status from the very first (menu-closed) tick.
+    private var knownPeers: [(name: String, ip: String)] = []
+    private var peerStatuses: [String: PeerBadge.Status] = [:]
+
     static let closedInterval: TimeInterval = 15
     static let openInterval: TimeInterval = 3
+    private static let peersKey = "knownPeers"
+    private static let autoLoginKey = "didAutoRegisterLoginItem"
 
     init() {
         let cfg = URLSessionConfiguration.ephemeral
@@ -32,8 +43,25 @@ final class FleetModel: ObservableObject {
         cfg.timeoutIntervalForResource = 3
         session = URLSession(configuration: cfg)
         tailmonPath = Self.findTailmon()
+        loadPeers()
+        registerLoginItemOnce()
         log.line("launch; tailmon binary: \(tailmonPath ?? "NOT FOUND")")
         reschedule(fireNow: true)
+    }
+
+    // Launch at login is the DEFAULT (owner: the fleet contains machines that
+    // boot unattended — monitoring must survive reboots). Registered once; if
+    // the owner disables it later in System Settings we never re-force it.
+    private func registerLoginItemOnce() {
+        let d = UserDefaults.standard
+        guard !d.bool(forKey: Self.autoLoginKey) else { return }
+        d.set(true, forKey: Self.autoLoginKey)
+        do {
+            try SMAppService.mainApp.register()
+            log.line("registered as login item (first-launch default)")
+        } catch {
+            log.line("login item registration failed: \(error.localizedDescription)")
+        }
     }
 
     private static func findTailmon() -> String? {
@@ -62,32 +90,89 @@ final class FleetModel: ObservableObject {
         if menuOpen { refreshFleet() }
     }
 
-    // MARK: - Icon (local agent, cheap, no subprocess)
+    // MARK: - Label (local stats + peer probes; no subprocesses, ever)
 
     private func refreshIcon() {
-        guard let url = URL(string: "http://127.0.0.1:7020/stats?top=1") else { return }
+        guard !iconInFlight else { return }
+        iconInFlight = true
         Task { [weak self] in
             guard let self else { return }
-            do {
-                let (data, _) = try await self.session.data(from: url)
-                let s = try tailmonJSONDecoder().decode(Stats.self, from: data)
-                self.iconText = Self.iconLabel(for: s)
-            } catch {
-                self.iconText = "–"
-            }
+            let stats = await self.fetchLocalStats()
+            // While the menu is open the fleet fetch refreshes statuses with
+            // better granularity; probe only when closed.
+            if !self.menuOpen { await self.probePeers() }
+            self.iconImage = IconRenderer.render(
+                IconInfo.make(stats: stats, peers: self.currentBadges()))
+            self.iconInFlight = false
         }
     }
 
-    nonisolated static func iconLabel(for s: Stats) -> String {
-        let cpu = Int(s.cpu.percent.rounded())
-        let usedG = Double(s.mem.usedMb) / 1024
-        var label = String(format: "%d%% %.0fG", cpu, usedG)
-        switch s.mem.pressure {
-        case "warn": label += " ⚠︎"
-        case "critical": label += " ‼︎"
-        default: break
+    private func fetchLocalStats() async -> Stats? {
+        guard let url = URL(string: "http://127.0.0.1:7020/stats?top=1") else { return nil }
+        do {
+            let (data, _) = try await session.data(from: url)
+            return try tailmonJSONDecoder().decode(Stats.self, from: data)
+        } catch {
+            return nil
         }
-        return label
+    }
+
+    private func probePeers() async {
+        await withTaskGroup(of: (String, PeerBadge.Status).self) { group in
+            for peer in knownPeers {
+                let session = self.session
+                group.addTask {
+                    guard let url = URL(string: "http://\(peer.ip):7020/health") else {
+                        return (peer.name, .unknown)
+                    }
+                    do {
+                        _ = try await session.data(from: url)
+                        return (peer.name, .live)
+                    } catch let e as URLError where e.code == .timedOut {
+                        return (peer.name, .offline) // tailscale blackholes offline IPs
+                    } catch {
+                        return (peer.name, .noAgent) // reachable, port closed
+                    }
+                }
+            }
+            for await (name, status) in group { peerStatuses[name] = status }
+        }
+    }
+
+    private func currentBadges() -> [PeerBadge] {
+        knownPeers.map {
+            PeerBadge(
+                letter: IconInfo.badgeLetter(for: $0.name),
+                status: peerStatuses[$0.name] ?? .unknown)
+        }
+    }
+
+    private func loadPeers() {
+        let stored = UserDefaults.standard.array(forKey: Self.peersKey) as? [[String: String]] ?? []
+        knownPeers = stored.compactMap { d in
+            guard let n = d["name"], let ip = d["ip"], !ip.isEmpty else { return nil }
+            return (n, ip)
+        }.sorted { $0.name < $1.name }
+    }
+
+    private func updatePeers(from report: Report) {
+        let peers = report.hosts
+            .filter { $0.source != "local" }
+            .compactMap { h -> (String, String)? in
+                guard let ip = h.ip, !ip.isEmpty else { return nil }
+                return (h.host, ip)
+            }
+            .sorted { $0.0 < $1.0 }
+        knownPeers = peers.map { (name: $0.0, ip: $0.1) }
+        for h in report.hosts where h.source != "local" {
+            switch h.status {
+            case "live": peerStatuses[h.host] = .live
+            case "offline": peerStatuses[h.host] = .offline
+            default: peerStatuses[h.host] = .noAgent
+            }
+        }
+        UserDefaults.standard.set(
+            knownPeers.map { ["name": $0.name, "ip": $0.ip] }, forKey: Self.peersKey)
     }
 
     // MARK: - Fleet (menu open only; spawns `tailmon json --top 10`)
@@ -108,6 +193,7 @@ final class FleetModel: ObservableObject {
                 case .success(let r):
                     self.report = r
                     self.fleetError = nil
+                    self.updatePeers(from: r)
                 case .failure(let e):
                     self.fleetError = e.localizedDescription
                     self.log.line("fleet fetch failed: \(e.localizedDescription)")

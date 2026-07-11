@@ -11,19 +11,23 @@ collector/CLI/menubar stack lives on the `v1-python` branch.)
 ## Tailmon.app — the menu bar monitor (macOS)
 
 `menubar/` is a SwiftUI menu bar app on top of the same agents — the Stats.app
-replacement. The menu bar label shows the local machine's live CPU% and memory
-(with a pressure marker); the dropdown shows every tailnet host with full
-stats **and a top-processes list per host** ("what is actually running").
-Strictly read-only: no power controls, no kill — by owner rule.
+replacement. The menu bar label shows the local machine's live **CPU / GPU /
+RAM percentages** (Stats-style stacked columns, tightly packed; RAM tinted by
+memory pressure) plus **one letter per other tailnet device** colored by
+status — green live, orange no-agent, dim offline (letters learned on the
+first menu open, then persisted). The dropdown shows every tailnet host with
+full stats **and a top-processes list per host** ("what is actually
+running"). Strictly read-only: no power controls, no kill — by owner rule.
 
-Efficiency contract: menu closed → one localhost poll per 15s for the label,
-zero subprocess spawns. Menu open → `tailmon json --top 10` every 3s, one in
-flight max. No history kept; log capped at 1 MB.
+Efficiency contract: menu closed → one localhost poll + a few tiny peer
+/health probes per 15s, **zero subprocess spawns**. Menu open → `tailmon json
+--top 10` every 3s, one in flight max. No history kept; log capped at 1 MB.
 
 ```
 cd menubar && ./install.sh     # builds Tailmon.app, installs to /Applications
 ```
-Enable "Launch at login" from the dropdown footer.
+Launch-at-login is registered automatically on first launch (manage it in
+System Settings → Login Items; the app never re-forces it).
 
 ## Design rules
 

@@ -11,7 +11,11 @@ struct TailmonApp: App {
         MenuBarExtra {
             FleetView().environmentObject(model)
         } label: {
-            Text(model.iconText).monospacedDigit()
+            if let img = model.iconImage {
+                Image(nsImage: img)
+            } else {
+                Text("…")
+            }
         }
         .menuBarExtraStyle(.window)
     }
