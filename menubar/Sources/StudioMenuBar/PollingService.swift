@@ -13,7 +13,7 @@ public final class PollingService: ObservableObject {
     private var task: Task<Void, Never>?
 
     /// Poll interval when the popover is closed.
-    public var idleInterval: TimeInterval = 3.0
+    public var idleInterval: TimeInterval = 10.0
     /// Poll interval when the popover is open.
     public var openInterval: TimeInterval = 1.0
 
@@ -68,14 +68,27 @@ public final class PollingService: ObservableObject {
 
     private func pollOnce() async {
         guard let appState = appState else { return }
+        // When the popover is closed only `MenuBarView` is visible, and it
+        // displays cpu% (from stats) and ssh-session count. Skip the heavier
+        // endpoints (processes / ports / tmux) so we don't generate
+        // gratuitous @Published churn that would re-render the (hidden but
+        // attached) PopoverView every tick.
+        let lite = !popoverOpen
         do {
-            async let stats = client.stats()
-            async let processes = client.processes(limit: 10)
-            async let ports = client.ports()
-            async let ssh = client.sshSessions()
-            async let tmux = client.tmuxSessions()
-            let (s, p, po, ss, tm) = try await (stats, processes, ports, ssh, tmux)
-            appState.apply(stats: s, processes: p, ports: po, ssh: ss, tmux: tm)
+            if lite {
+                async let stats = client.stats()
+                async let ssh = client.sshSessions()
+                let (s, ss) = try await (stats, ssh)
+                appState.apply(stats: s, processes: nil, ports: nil, ssh: ss, tmux: nil)
+            } else {
+                async let stats = client.stats()
+                async let processes = client.processes(limit: 10)
+                async let ports = client.ports()
+                async let ssh = client.sshSessions()
+                async let tmux = client.tmuxSessions()
+                let (s, p, po, ss, tm) = try await (stats, processes, ports, ssh, tmux)
+                appState.apply(stats: s, processes: p, ports: po, ssh: ss, tmux: tm)
+            }
         } catch let err as StudioClientError {
             appState.markError(err.shortLabel)
         } catch {

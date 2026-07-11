@@ -23,8 +23,26 @@ struct PopoverView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var coordinator: Coordinator
     @State private var selectedTab: PopoverTab = .processes
+    @State private var isPresented = false
 
     var body: some View {
+        // The heavy view tree (Table, Picker, Charts, GeometryReaders) is only
+        // built while the popover is actually visible. Without this gate,
+        // MenuBarExtra(.window) keeps the content view attached and re-evaluates
+        // its body on every @Published change, leaking AppKit Auto Layout
+        // constraints over time.
+        Group {
+            if isPresented {
+                content
+            } else {
+                Color.clear.frame(width: 1, height: 1)
+            }
+        }
+        .onAppear { isPresented = true }
+        .onDisappear { isPresented = false }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 10) {
             headerView
             if let msg = appState.configError {
