@@ -17,7 +17,7 @@ memory pressure) plus **one letter per other tailnet device** colored by
 status — green live, orange no-agent, dim offline (letters learned on the
 first menu open, then persisted). The dropdown shows every tailnet host with
 full stats **and a top-processes list per host** ("what is actually
-running"). Strictly read-only: no power controls, no kill — by owner rule.
+running"). Strictly read-only: no power controls, no kill — by design.
 
 Efficiency contract: menu closed → one localhost poll + a few tiny peer
 /health probes per 15s, **zero subprocess spawns**. Menu open → `tailmon json
@@ -43,6 +43,28 @@ System Settings → Login Items; the app never re-forces it).
   and 127.0.0.1 on port **7020**; tailnet membership is the security perimeter
   (monitor-only, read-only data).
 
+## Requirements & install
+
+Clone-and-build; no prebuilt binaries (yet). You need:
+
+- **Go 1.22+** (agent, TUI, CLI — all platforms)
+- **[Tailscale](https://tailscale.com)** with the `tailscale` CLI available
+  (peer discovery; without it tailmon monitors localhost only)
+- **Swift toolchain** (macOS only, optional — just for the menu bar app)
+
+```sh
+git clone https://github.com/barathanaslan/tailmon && cd tailmon
+./build.sh                        # dist/ binaries for darwin/windows/linux
+./deploy/install-macos.sh         # macOS: agent as a user LaunchAgent
+cd menubar && ./install.sh        # macOS, optional: Tailmon.app menu bar UI
+```
+
+Windows and Linux: see [deploy/README.md](deploy/README.md). Go users can
+also grab just the CLI with
+`go install github.com/barathanaslan/tailmon/cmd/tailmon@latest`.
+Run `tailmon agent` on every machine you want visible, then `tailmon` (TUI)
+or `tailmon json` from anywhere. MIT licensed.
+
 ## Subcommands
 
 ```
@@ -56,7 +78,7 @@ tailmon version
 `tailmon sample` is the zero-setup debug path — it works over bare ssh:
 
 ```sh
-ssh barat@100.95.91.27 "tailmon.exe sample"
+ssh user@some-windows-box "tailmon.exe sample"
 ```
 
 ## TUI
@@ -64,10 +86,10 @@ ssh barat@100.95.91.27 "tailmon.exe sample"
 One card per host: CPU bar, RAM bar with memory-pressure color, GPU util (+
 VRAM/temp on NVIDIA), disk free, uptime, the remote agent's own RSS, and CPU/
 RAM sparklines. Hosts are `live` (agent answered), `no agent` (online, :7020
-closed), or `offline`. Keys: `q` quit · `p` pause · `r` refresh · `j/k` select
-· `w` wake the CUDA box (via `~/bin/cuda on`) · `s` shut it down (confirmed,
-via `~/bin/cuda off`, which refuses if the GPU is busy). Without the
-`tailscale` CLI it degrades to monitoring localhost only.
+closed), or `offline`. Keys: `q` quit · `p` pause · `r` refresh · `j/k`
+select. Deliberately no power controls — tailmon observes machines, it never
+changes their state. Without the `tailscale` CLI it degrades to monitoring
+localhost only.
 
 ## JSON
 

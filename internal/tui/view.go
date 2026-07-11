@@ -67,7 +67,7 @@ func (m *model) renderCard(r *row, selected bool) string {
 	case r.status == aggregate.StatusLive && r.stats != nil:
 		lines = append(lines, m.renderStatsLines(r, inner)...)
 	case r.status == aggregate.StatusOffline:
-		lines = append(lines, styleDim.Render("offline (wake outside tailmon: `cuda on`)"))
+		lines = append(lines, styleDim.Render("offline"))
 	default: // no-agent
 		hint := "online, no agent on :7020 — install tailmon agent on this host"
 		if r.errMsg != "" {

@@ -3,8 +3,8 @@
 # RUN ONCE in an *elevated* context:
 #   powershell -ExecutionPolicy Bypass -File install-windows.ps1
 #
-# On barathans-5070, ssh sessions as barat ARE elevated (the key is in
-# administrators_authorized_keys), so this can run remotely over ssh.
+# (If your ssh sessions carry an admin token - e.g. the key is in
+# administrators_authorized_keys - this can be run remotely over ssh.)
 # NOTE: keep this file ASCII-only - PowerShell 5.1 parses BOM-less UTF-8
 # as ANSI and multi-byte characters corrupt string literals.
 #
