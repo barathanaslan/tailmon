@@ -136,15 +136,19 @@ func CollectTop(ctx context.Context, top int) *Report {
 	return report
 }
 
-// localResult samples this machine in-process (top 0 = default count).
+// localResult gets this machine's stats. It asks the local agent first —
+// that shares the agent's 1s single-flight cache with every other viewer
+// (no double sampling, and no 500ms measurement window when the answer is
+// already warm). Only when no agent runs does it sample in-process.
 func localResult(ctx context.Context, h discover.Host, top int) HostResult {
 	r := HostResult{Host: h.Name, IP: h.IP, OS: h.OS, Status: StatusLive, Source: "local"}
-	var stats *sample.Stats
-	var err error
-	if top > 0 {
-		stats, err = sample.CollectTop(ctx, top)
-	} else {
-		stats, err = sample.Collect(ctx)
+	stats, err := fetchLocalAgent(ctx, top)
+	if err != nil {
+		if top > 0 {
+			stats, err = sample.CollectTop(ctx, top)
+		} else {
+			stats, err = sample.Collect(ctx)
+		}
 	}
 	if err != nil {
 		r.Status, r.Source, r.Error = StatusNoAgent, "", err.Error()
@@ -155,4 +159,12 @@ func localResult(ctx context.Context, h discover.Host, top int) HostResult {
 	}
 	r.Stats = stats
 	return r
+}
+
+func fetchLocalAgent(ctx context.Context, top int) (*sample.Stats, error) {
+	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	client := &http.Client{Timeout: 2 * time.Second}
+	defer client.CloseIdleConnections()
+	return FetchStats(cctx, client, "127.0.0.1", agent.DefaultPort, top)
 }

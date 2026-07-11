@@ -86,8 +86,14 @@ final class FleetModel: ObservableObject {
     }
 
     private func tick() {
-        refreshIcon()
-        if menuOpen { refreshFleet() }
+        // Menu open: the fleet fetch is the single data path — the label is
+        // derived from its local-host entry (no separate poll, no double
+        // sampling of this machine). Menu closed: only the cheap label poll.
+        if menuOpen {
+            refreshFleet()
+        } else {
+            refreshIcon()
+        }
     }
 
     // MARK: - Label (local stats + peer probes; no subprocesses, ever)
@@ -194,6 +200,9 @@ final class FleetModel: ObservableObject {
                     self.report = r
                     self.fleetError = nil
                     self.updatePeers(from: r)
+                    let localStats = r.hosts.first { $0.source == "local" }?.stats
+                    self.iconImage = IconRenderer.render(
+                        IconInfo.make(stats: localStats, peers: self.currentBadges()))
                 case .failure(let e):
                     self.fleetError = e.localizedDescription
                     self.log.line("fleet fetch failed: \(e.localizedDescription)")
