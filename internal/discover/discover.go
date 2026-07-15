@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/netip"
+	"os"
 	"os/exec"
 	"sort"
 	"strings"
@@ -64,7 +66,7 @@ func Hosts(ctx context.Context) ([]Host, error) {
 func parseStatus(out []byte) ([]Host, error) {
 	var st tsStatus
 	if err := json.Unmarshal(out, &st); err != nil {
-		return nil, errors.New("tailscale status returned non-JSON output")
+		return nil, fmt.Errorf("tailscale status returned non-JSON output (%.60q)", firstLine(out))
 	}
 	var hosts []Host
 	if st.Self != nil {
@@ -126,5 +128,21 @@ func runTailscale(ctx context.Context, bin string, args ...string) ([]byte, erro
 	defer cancel()
 	cmd := exec.CommandContext(cctx, bin, args...)
 	cmd.Stdin = nil
+	// The macOS GUI-app CLI misbehaves in shell-less contexts (login items,
+	// launchd): without SHLVL in the env it tries to LAUNCH the GUI instead
+	// of talking to the running one, printing "The Tailscale GUI failed to
+	// start" to stdout with exit 0. Empirically SHLVL is the switch (found
+	// by env bisection, Tailscale 1.96.5). Inject it when absent.
+	if os.Getenv("SHLVL") == "" {
+		cmd.Env = append(os.Environ(), "SHLVL=1")
+	}
 	return cmd.Output()
+}
+
+func firstLine(b []byte) string {
+	s := strings.TrimSpace(string(b))
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	return s
 }
