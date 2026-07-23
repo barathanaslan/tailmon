@@ -15,8 +15,13 @@ import (
 	"github.com/barathanaslan/tailmon/internal/sample"
 )
 
-// RequestTimeout bounds each per-host /stats request (plan: 800ms).
-const RequestTimeout = 800 * time.Millisecond
+// RequestTimeout bounds each per-host /stats request. A cold sample costs
+// ~600ms by construction (the 500ms CPU measurement window) — measured 580ms
+// on Windows, 645ms on macOS — so the original 800ms left almost no headroom
+// and a busy host would drop out of the view as a bogus "no agent". Requests
+// run concurrently and asynchronously, so a generous bound costs nothing but
+// a later card update for the one slow host.
+const RequestTimeout = 2500 * time.Millisecond
 
 // Host statuses.
 const (

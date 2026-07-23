@@ -43,6 +43,19 @@ Write-Host "copied $src -> $exe"
 
 # ONSTART task as SYSTEM: survives logoff, starts with the machine.
 schtasks /create /f /sc onstart /ru SYSTEM /tn tailmon-agent /tr "`"$exe`" agent"
+
+# Task Scheduler's defaults are built for finite jobs, not daemons, and will
+# silently kill this one:
+#   ExecutionTimeLimit PT72H -> agent terminated after exactly 3 days
+#   *IfGoingOnBatteries      -> won't start / gets stopped on battery or UPS
+# Override both, and restart the agent if it ever exits on its own.
+$settings = New-ScheduledTaskSettingsSet `
+    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+    -ExecutionTimeLimit ([TimeSpan]::Zero) `
+    -RestartInterval (New-TimeSpan -Minutes 1) -RestartCount 3 `
+    -MultipleInstances IgnoreNew
+Set-ScheduledTask -TaskName tailmon-agent -Settings $settings | Out-Null
+
 schtasks /run /tn tailmon-agent
 
 Start-Sleep -Seconds 2
