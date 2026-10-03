@@ -15,9 +15,11 @@ replacement. The menu bar label shows the local machine's live **CPU / GPU /
 RAM percentages** (Stats-style stacked columns, tightly packed; RAM tinted by
 memory pressure) plus **one letter per other tailnet device** colored by
 status — green live, orange no-agent, dim offline (letters learned on the
-first menu open, then persisted). The dropdown shows every tailnet host with
+first menu open, then persisted). The dropdown shows every fleet host with
 full stats **and a top-processes list per host** ("what is actually
-running"). Strictly read-only: no power controls, no kill — by design.
+running"). A device only joins the fleet once it has answered with a live
+agent; tailnet nodes that never ran tailmon (phones, other people's machines)
+are not shown at all. Strictly read-only: no power controls, no kill — by design.
 
 Efficiency contract: menu closed → one localhost poll + a few tiny peer
 /health probes per 15s, **zero subprocess spawns**. Menu open → `tailmon json

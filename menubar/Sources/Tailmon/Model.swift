@@ -25,6 +25,45 @@ struct HostResult: Decodable, Identifiable {
     var isLive: Bool { status == "live" }
 }
 
+// AgentRegistry remembers every node that has ever answered with a live
+// agent. "offline" and "no-agent" only mean something for those nodes; a node
+// that never ran tailmon (someone else's machine, a phone) is not part of the
+// fleet and stays out of the dropdown and the label. Keyed by tailnet IP,
+// which is stable per node, unlike the OS hostname.
+struct AgentRegistry {
+    private(set) var keys: Set<String>
+
+    init(keys: Set<String> = []) { self.keys = keys }
+
+    static func key(host: String, ip: String?) -> String {
+        if let ip, !ip.isEmpty { return ip }
+        return "name:" + host
+    }
+
+    func contains(host: String, ip: String?) -> Bool {
+        keys.contains(Self.key(host: host, ip: ip))
+    }
+
+    /// Returns true when a new node was learned.
+    @discardableResult
+    mutating func recordLive(host: String, ip: String?) -> Bool {
+        keys.insert(Self.key(host: host, ip: ip)).inserted
+    }
+
+    @discardableResult
+    mutating func record(_ hosts: [HostResult]) -> Bool {
+        var learned = false
+        for h in hosts where h.isLive { learned = recordLive(host: h.host, ip: h.ip) || learned }
+        return learned
+    }
+
+    /// The local machine always shows: it is sampled in-process even without
+    /// an agent.
+    func visible(_ hosts: [HostResult]) -> [HostResult] {
+        hosts.filter { $0.isLive || $0.source == "local" || contains(host: $0.host, ip: $0.ip) }
+    }
+}
+
 struct Stats: Decodable {
     var schema: Int
     var host: String

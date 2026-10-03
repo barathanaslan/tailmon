@@ -358,3 +358,19 @@ repo rename; later phases: ports/ssh/tmux insight, Windows tray.
   is `ip/host`. Regression test `TestParseStatusDuplicateHostName`.
 - Not a tailmon bug: the 5090 and tahalinux really were offline at the time.
 
+---
+
+## 2026-10-03 — menubar: dropdown height, never-agent nodes hidden
+
+- Dropdown left blank bands above and below the content after "processes"
+  collapsed: `MenuBarExtra(.window)` grows its window with the content but
+  never shrinks it, and SwiftUI centres the smaller content. `FleetView` now
+  measures its height and `WindowHeightFitter` sets the window to it, top
+  edge pinned under the menu bar.
+- Nodes that never ran an agent (e.g. tahalinux: "online — no tailmon agent")
+  showed as cards and as a yellow label letter. `AgentRegistry` (persisted
+  as `agentHosts` in UserDefaults, keyed by tailnet IP) records every node
+  ever seen live; only those show as offline / no-agent. All known peers are
+  still probed while the menu is closed, so a newly installed agent appears
+  without opening the menu. Tests: `AgentRegistryTests`. TUI unchanged — it
+  still lists every node with an install hint.

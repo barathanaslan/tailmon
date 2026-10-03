@@ -15,6 +15,8 @@ import SwiftUI
 final class FleetModel: ObservableObject {
     @Published var iconImage: NSImage?
     @Published var report: Report?
+    /// report.hosts minus nodes that never ran an agent (see AgentRegistry).
+    @Published var hosts: [HostResult]?
     @Published var fleetError: String?
     @Published var menuOpen = false {
         didSet { if menuOpen != oldValue { reschedule(fireNow: menuOpen) } }
@@ -31,10 +33,12 @@ final class FleetModel: ObservableObject {
     // label can show device status from the very first (menu-closed) tick.
     private var knownPeers: [(name: String, ip: String)] = []
     private var peerStatuses: [String: PeerBadge.Status] = [:]
+    private var agents = AgentRegistry()
 
     static let closedInterval: TimeInterval = 15
     static let openInterval: TimeInterval = 3
     private static let peersKey = "knownPeers"
+    private static let agentsKey = "agentHosts"
     private static let autoLoginKey = "didAutoRegisterLoginItem"
 
     init() {
@@ -44,6 +48,8 @@ final class FleetModel: ObservableObject {
         session = URLSession(configuration: cfg)
         tailmonPath = Self.findTailmon()
         loadPeers()
+        agents = AgentRegistry(
+            keys: Set(UserDefaults.standard.stringArray(forKey: Self.agentsKey) ?? []))
         registerLoginItemOnce()
         log.line("launch; tailmon binary: \(tailmonPath ?? "NOT FOUND")")
         reschedule(fireNow: true)
@@ -143,10 +149,21 @@ final class FleetModel: ObservableObject {
             }
             for await (name, status) in group { peerStatuses[name] = status }
         }
+        var learned = false
+        for peer in knownPeers where peerStatuses[peer.name] == .live {
+            learned = agents.recordLive(host: peer.name, ip: peer.ip) || learned
+        }
+        if learned { saveAgents() }
     }
 
+    private func saveAgents() {
+        UserDefaults.standard.set(agents.keys.sorted(), forKey: Self.agentsKey)
+    }
+
+    // Every peer is still probed (that is how a freshly installed agent gets
+    // noticed), but only nodes that have run an agent get a letter.
     private func currentBadges() -> [PeerBadge] {
-        knownPeers.map {
+        knownPeers.filter { agents.contains(host: $0.name, ip: $0.ip) }.map {
             PeerBadge(
                 letter: IconInfo.badgeLetter(for: $0.name),
                 status: peerStatuses[$0.name] ?? .unknown)
@@ -198,6 +215,8 @@ final class FleetModel: ObservableObject {
                 switch result {
                 case .success(let r):
                     self.report = r
+                    if self.agents.record(r.hosts) { self.saveAgents() }
+                    self.hosts = self.agents.visible(r.hosts)
                     self.fleetError = nil
                     self.updatePeers(from: r)
                     let localStats = r.hosts.first { $0.source == "local" }?.stats

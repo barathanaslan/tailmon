@@ -5,6 +5,7 @@ import SwiftUI
 
 struct FleetView: View {
     @EnvironmentObject var model: FleetModel
+    @State private var contentHeight: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -15,7 +16,7 @@ struct FleetView: View {
             if let err = model.fleetError {
                 Text(err).font(.caption).foregroundStyle(.orange)
             }
-            if let hosts = model.report?.hosts {
+            if let hosts = model.hosts {
                 ForEach(hosts) { HostCard(result: $0) }
             } else if model.fleetError == nil {
                 ProgressView().controlSize(.small)
@@ -26,6 +27,12 @@ struct FleetView: View {
         }
         .padding(12)
         .frame(width: 360)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(GeometryReader { g in
+            Color.clear.preference(key: ContentHeightKey.self, value: g.size.height)
+        })
+        .onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
+        .background(WindowHeightFitter(height: contentHeight))
         .onAppear { model.menuOpen = true }
         .onDisappear { model.menuOpen = false }
     }
@@ -49,6 +56,37 @@ struct FleetView: View {
                 .foregroundStyle(.secondary)
         }
         .font(.caption)
+    }
+}
+
+private struct ContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+// MenuBarExtra(.window) grows its window when the content grows but never
+// shrinks it: collapsing "processes" or losing a host card left the old
+// height, with the content centred and blank bands above and below. Size the
+// window to the content ourselves, keeping the top edge under the menu bar.
+private struct WindowHeightFitter: NSViewRepresentable {
+    let height: CGFloat
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        guard height > 0 else { return }
+        let height = ceil(height)
+        // The window is attached after the first layout pass.
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            let content = window.contentRect(forFrameRect: window.frame)
+            guard abs(content.height - height) >= 1 else { return }
+            let target = NSRect(x: content.minX, y: content.maxY - height,
+                                width: content.width, height: height)
+            window.setFrame(window.frameRect(forContentRect: target), display: true)
+        }
     }
 }
 
