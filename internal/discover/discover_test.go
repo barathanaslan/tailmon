@@ -40,6 +40,28 @@ func TestParseStatus(t *testing.T) {
 	}
 }
 
+// A cloned machine reports the same OS hostname as the original; only the
+// tailnet DNS name (what the admin console shows) tells the nodes apart.
+// Both used to render as "barathans-mini", and the menubar app drew the two
+// rows from one entry.
+func TestParseStatusDuplicateHostName(t *testing.T) {
+	const dup = `{
+  "Self": {"HostName": "barathans-mini", "DNSName": "barathans-mini.example.ts.net.",
+           "OS": "macOS", "Online": true, "TailscaleIPs": ["100.108.255.119"]},
+  "Peer": {
+    "k1": {"HostName": "barathans-mini", "DNSName": "barathans-macbook.example.ts.net.",
+           "OS": "macOS", "Online": false, "TailscaleIPs": ["100.80.159.96"]}
+  }
+}`
+	hosts, err := parseStatus([]byte(dup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hosts) != 2 || hosts[0].Name != "barathans-mini" || hosts[1].Name != "barathans-macbook" {
+		t.Errorf("duplicate OS hostnames must resolve via DNS name: %+v", hosts)
+	}
+}
+
 func TestParseStatusGarbage(t *testing.T) {
 	if _, err := parseStatus([]byte("not json")); err == nil {
 		t.Error("garbage must error")

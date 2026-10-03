@@ -18,7 +18,10 @@ struct HostResult: Decodable, Identifiable {
     var error: String?
     var stats: Stats?
 
-    var id: String { host }
+    // Host names are not unique on a tailnet (a cloned machine can share its
+    // original's hostname); a duplicate id makes ForEach draw both rows from
+    // one entry. The tailnet IP is unique per node.
+    var id: String { "\(ip ?? "")/\(host)" }
     var isLive: Bool { status == "live" }
 }
 

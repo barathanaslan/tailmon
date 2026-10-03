@@ -343,3 +343,18 @@ agent (see `menubar/STATUS.md`).
 verification is visual); Windows box gets the ?top= agent whenever it's next
 on (`scp dist/tailmon-windows-amd64.exe` + task restart, or just ask); decide
 repo rename; later phases: ports/ssh/tmux insight, Windows tray.
+
+---
+
+## 2026-10-03 — duplicate host names drew the wrong card
+
+- Symptom: menubar dropdown showed every machine "offline", including the Mac
+  it runs on, with Tailscale up. After the Migration Assistant clone, two
+  tailnet nodes reported the same OS hostname (`barathans-mini`), and
+  `HostResult.id` was the bare host name, so SwiftUI `ForEach` drew both rows
+  from one entry (the offline MacBook's).
+- Fix: `discover` now names a node by the first label of its tailnet DNS name
+  (what the admin console shows), falling back to HostName; `HostResult.id`
+  is `ip/host`. Regression test `TestParseStatusDuplicateHostName`.
+- Not a tailmon bug: the 5090 and tahalinux really were offline at the time.
+

@@ -38,6 +38,7 @@ var tailscaleCandidates = []string{
 
 type tsPeer struct {
 	HostName     string   `json:"HostName"`
+	DNSName      string   `json:"DNSName"`
 	OS           string   `json:"OS"`
 	Online       bool     `json:"Online"`
 	TailscaleIPs []string `json:"TailscaleIPs"`
@@ -88,11 +89,22 @@ func parseStatus(out []byte) ([]Host, error) {
 
 func hostFromPeer(p *tsPeer) Host {
 	return Host{
-		Name:   strings.ToLower(p.HostName),
+		Name:   displayName(p),
 		IP:     firstIPv4(p.TailscaleIPs),
 		OS:     p.OS,
 		Online: p.Online,
 	}
+}
+
+// displayName prefers the first label of the tailnet DNS name over HostName.
+// HostName is whatever the OS reports and is not unique: a cloned Mac keeps
+// the original's hostname, so two nodes can both say "barathans-mini" while
+// the control plane (and the admin console) tells them apart by DNS name.
+func displayName(p *tsPeer) string {
+	if label, _, _ := strings.Cut(strings.TrimSuffix(p.DNSName, "."), "."); label != "" {
+		return strings.ToLower(label)
+	}
+	return strings.ToLower(p.HostName)
 }
 
 func agentCapableOS(os string) bool {
