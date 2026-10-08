@@ -374,3 +374,21 @@ repo rename; later phases: ports/ssh/tmux insight, Windows tray.
   still probed while the menu is closed, so a newly installed agent appears
   without opening the menu. Tests: `AgentRegistryTests`. TUI unchanged — it
   still lists every node with an install hint.
+
+---
+
+## 2026-10-08 — Tailmon.app icon
+
+- `menubar/Resources/icon.svg` is the source: same family as the Mini VSCode /
+  Mini Ekran launchers (gradient rounded square, gloss, drop shadow, light
+  case with a dark screen), in green. The screen shows CPU / GPU / RAM meter
+  columns; the dots below are tailnet devices in the label's status colors
+  (live, live, no agent, offline).
+- `AppIcon.icns` is rendered from it (headless Chrome screenshot at 1024 px —
+  ImageMagick's built-in SVG renderer drops `feDropShadow` — then `iconutil`)
+  and committed. `build.sh` copies it into the bundle; `Info.plist` sets
+  `CFBundleIconFile`.
+- Build note: the Command Line Tools macOS 27 SDK ships SwiftUI's `@State`
+  macro without its compiler plugin ("plugin for module 'SwiftUIMacros' not
+  found"), so `swift build` fails on a CLT-only Mac. Build against an older
+  SDK: `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk ./install.sh`.
