@@ -131,7 +131,11 @@ macOS). NVIDIA GPUs add `power_w`, `power_limit_w`, `fan_pct`. Disks: macOS
 reports the root as `/` labelled `HD` (usage of the Data volume) plus every
 real volume under `/Volumes`; Windows every fixed/removable drive letter;
 Linux every real filesystem. `kind` is internal / external / removable.
-Free-space queries only — directories are never walked. All 0.3.0 fields are
+Free-space queries only — directories are never walked. The agent keeps the
+last reading of every volume on disk (`%ProgramData%\tailmon\disks.json` on
+Windows, the user cache dir elsewhere; non-removable volumes and ~1 TB+
+removable ones, 30 days): a volume that is absent now (an external drive
+asleep or switched off) is still reported with `"stale": true` and `seen_at`. All 0.3.0 fields are
 additive; schema stays 1.
 
 **macOS memory note:** `used_mb` is `total - available` — the same sense of

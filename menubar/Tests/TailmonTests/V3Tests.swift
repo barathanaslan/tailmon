@@ -109,6 +109,16 @@ final class V3Tests: XCTestCase {
         XCTAssertEqual(merged.map(\.mount), ["C:\\", "D:\\"]) // removable not remembered
         XCTAssertEqual(merged[1], d)
 
+        // An agent-side stale D: (0.3.0 agents remember it themselves) does
+        // not refresh the app's own reading.
+        var staleD = d
+        staleD.freeGb = 1
+        staleD.stale = true
+        var m2 = m
+        m2.recordLive(host: "box", disks: [c, staleD], now: t0.addingTimeInterval(60))
+        XCTAssertEqual(m2.disks["box"]?["D:\\"]?.disk, d)
+        XCTAssertEqual(m2.merged(host: "box", live: [c, staleD]).map(\.mount), ["C:\\", "D:\\"])
+
         // Encodes/decodes for UserDefaults.
         let data = try! JSONEncoder().encode(m)
         XCTAssertEqual(try! JSONDecoder().decode(HostMemory.self, from: data), m)

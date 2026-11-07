@@ -115,6 +115,10 @@ type Disk struct {
 	Label  string  `json:"label,omitempty"`
 	FSType string  `json:"fstype,omitempty"`
 	Kind   string  `json:"kind,omitempty"` // internal | external | removable | network
+	// Stale: the volume is absent right now (drive asleep, disabled, or
+	// unplugged); the numbers are its last reading, taken at SeenAt.
+	Stale  bool       `json:"stale,omitempty"`
+	SeenAt *time.Time `json:"seen_at,omitempty"`
 }
 
 // Disk kinds.
@@ -236,7 +240,7 @@ func collect(ctx context.Context, topN int, lite bool) (*Stats, error) {
 
 	// --- Platform-specific GPU + disks. ---
 	s.GPU = collectGPUs(ctx)
-	s.Disks = platformDisks(ctx)
+	s.Disks = rememberDisks(platformDisks(ctx), time.Now())
 	s.DiskIO = diskIO(ctx)
 
 	// --- Net counters (cumulative since boot). ---

@@ -18,7 +18,8 @@ struct HostMemory: Codable, Equatable {
     /// not remembered: they come and go by design.
     mutating func recordLive(host: String, disks live: [Stats.Disk], now: Date = Date()) {
         var known = disks[host] ?? [:]
-        for d in live where d.kind != "removable" {
+        // Agent-reported stale disks are old readings: never refresh them here.
+        for d in live where d.kind != "removable" && d.stale != true {
             known[d.mount] = KnownDisk(disk: d, seen: now)
         }
         // A disk that came back as removable must not linger from an older reading.

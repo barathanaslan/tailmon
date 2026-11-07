@@ -151,14 +151,10 @@ struct HostCard: View {
         .background(RoundedRectangle(cornerRadius: 9).fill(.quaternary.opacity(0.6)))
     }
 
-    /// "macOS · M6" for Macs (the GPU is the SoC); the OS alone elsewhere —
-    /// discrete GPUs are named in their own bar.
+    /// The OS only: the owner knows their hardware (chip/GPU names are in
+    /// the tooltips).
     private func subtitle(_ s: Stats) -> String {
-        let os = Fmt.osName(result.os ?? s.os)
-        if os == "macOS", let g = s.gpu?.first, g.unified ?? true {
-            return "\(os) · \(Fmt.shortGPUName(g.name))"
-        }
-        return os
+        Fmt.osName(result.os ?? s.os)
     }
 
     private func agentTooltip(_ s: Stats) -> String {
@@ -190,6 +186,7 @@ struct MetricsGrid: View {
                     RowLabel("GPU")
                     GPUPair(gpu: g, memTotalMb: stats.mem.totalMb)
                         .padding(.vertical, 2) // a little air around the joined pair
+                        .help(g.name)
                 }
             }
             ForEach(disks, id: \.mount) { d in
@@ -258,12 +255,12 @@ struct GPUPair: View {
 
     private var isUnified: Bool { gpu.unified ?? (gpu.vramTotalMb == nil) }
 
-    /// "RTX 5090 · 71°C · 548 W"; Macs: the chip name.
-    private var utilDetail: String {
-        var parts = [Fmt.shortGPUName(gpu.name)]
+    /// "71°C · 548 W" — no GPU name (it is the tooltip); nil on Macs.
+    private var utilDetail: String? {
+        var parts: [String] = []
         if let t = gpu.tempC { parts.append(String(format: "%.0f°C", t)) }
         if let w = gpu.powerW { parts.append(String(format: "%.0f W", w)) }
-        return parts.joined(separator: " · ")
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private var memBar: (frac: Double, left: String, right: String?)? {
@@ -346,7 +343,8 @@ struct InBar: View {
 }
 
 /// "ağ ↓ 6.00 KB/s ↑ 4.00 KB/s   disk ↓ 880 KB/s ↑ 386 KB/s". Every value
-/// sits right-aligned in a fixed slot, so nothing moves when digits change.
+/// sits in a fixed-width slot right after its arrow, so nothing after it
+/// moves when digits change.
 struct RatesLine: View {
     let rates: Rates?
 
@@ -383,7 +381,7 @@ struct RatesLine: View {
 
     private func value(_ v: Double) -> some View {
         Text(Fmt.rate(v)).fontWeight(.medium)
-            .frame(width: Self.slot, alignment: .trailing)
+            .frame(width: Self.slot, alignment: .leading)
     }
 }
 

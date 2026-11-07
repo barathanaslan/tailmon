@@ -116,6 +116,10 @@ struct Stats: Decodable {
         var label: String?
         var fstype: String?
         var kind: String?
+        /// The agent's last reading of a volume that is absent now (asleep /
+        /// disabled drive); shown in the same style as live disks.
+        var stale: Bool?
+        var seenAt: String?
 
         /// Older agents have no used_gb (and a relaying agent may have
         /// written it as 0): fall back to total - free.
