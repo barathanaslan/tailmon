@@ -11,8 +11,9 @@ security perimeter (monitor-only, read-only data).
 ./deploy/install-macos.sh   # ~/bin/tailmon + user LaunchAgent, no sudo
 ```
 
-The agent runs as a **user LaunchAgent** (`com.bosphorify.tailmon`), RunAtLoad
-+ KeepAlive, logging to `~/Library/Logs/tailmon-agent.log`. Verify:
+The script copies the binary and runs `tailmon service install`: a **user
+LaunchAgent** (`com.bosphorify.tailmon`), RunAtLoad + KeepAlive, logging to
+`~/Library/Logs/tailmon-agent.log`. Verify with `tailmon service status` or:
 
 ```sh
 curl -s http://127.0.0.1:7020/health | jq .
@@ -32,8 +33,9 @@ For the menu bar app, see [`menubar/`](../menubar) (`cd menubar && ./install.sh`
 
 2. Run `deploy\install-windows.ps1` **in an elevated PowerShell** (locally,
    or over ssh if your ssh sessions carry an admin token). It copies the exe
-   to `C:\Tools\tailmon\`, registers a Task Scheduler ONSTART task running as
-   SYSTEM, and starts it.
+   to `C:\Tools\tailmon\` and runs `tailmon service install`, which registers
+   the Task Scheduler ONSTART task running as SYSTEM (no execution time limit,
+   runs on battery, restart on failure, below-normal priority) and starts it.
 
    Keep the script ASCII-only — PowerShell 5.1 reads BOM-less UTF-8 as ANSI
    and a stray em-dash breaks parsing.
@@ -43,8 +45,10 @@ snapshot and exits.
 
 ## Linux
 
-`./build.sh` produces `dist/tailmon-linux-amd64`; run `tailmon agent` under
-systemd or your supervisor of choice (no unit file shipped yet).
+`./build.sh` produces `dist/tailmon-linux-amd64`; copy it somewhere on PATH and
+run `tailmon service install` as your user (a systemd user unit; add
+`loginctl enable-linger $USER` to keep it running while logged out). The
+.deb/.rpm packages ship the same unit in `/usr/lib/systemd/user/`.
 
 ## Sanity checks from anywhere on the tailnet
 

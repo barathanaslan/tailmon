@@ -10,8 +10,8 @@
 #
 # What it does:
 #   1. copies tailmon.exe (from the same directory, or %USERPROFILE%) to C:\Tools\tailmon\
-#   2. registers a Task Scheduler ONSTART task running as SYSTEM
-#   3. starts it now
+#   2. runs `tailmon service install`: Task Scheduler ONSTART task as SYSTEM,
+#      started right away
 
 $ErrorActionPreference = "Stop"
 
@@ -41,22 +41,14 @@ New-Item -ItemType Directory -Force -Path $dest | Out-Null
 Copy-Item -Force $src $exe
 Write-Host "copied $src -> $exe"
 
-# ONSTART task as SYSTEM: survives logoff, starts with the machine.
-schtasks /create /f /sc onstart /ru SYSTEM /tn tailmon-agent /tr "`"$exe`" agent"
-
-# Task Scheduler's defaults are built for finite jobs, not daemons, and will
-# silently kill this one:
-#   ExecutionTimeLimit PT72H -> agent terminated after exactly 3 days
-#   *IfGoingOnBatteries      -> won't start / gets stopped on battery or UPS
-# Override both, and restart the agent if it ever exits on its own.
-$settings = New-ScheduledTaskSettingsSet `
-    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-    -ExecutionTimeLimit ([TimeSpan]::Zero) `
-    -RestartInterval (New-TimeSpan -Minutes 1) -RestartCount 3 `
-    -MultipleInstances IgnoreNew
-Set-ScheduledTask -TaskName tailmon-agent -Settings $settings | Out-Null
-
-schtasks /run /tn tailmon-agent
+# The scheduled task itself (ONSTART as SYSTEM, no 72h execution limit, runs
+# on battery, restart on failure, below-normal priority) is written by the
+# binary - the same code every install route uses.
+& $exe service install
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "tailmon service install failed (exit $LASTEXITCODE)"
+    exit 1
+}
 
 Start-Sleep -Seconds 2
 try {

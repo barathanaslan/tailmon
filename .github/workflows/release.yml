@@ -1,0 +1,61 @@
+# Release on a version tag: binaries, checksums, deb/rpm, the Homebrew
+# formula (tap barathanaslan/homebrew-tailmon), the Scoop manifest (bucket
+# barathanaslan/scoop-tailmon), and Tailmon.app + its cask.
+#
+# Needs one repository secret, TAP_GITHUB_TOKEN: a fine-grained token with
+# "Contents: read and write" on homebrew-tailmon and scoop-tailmon (the
+# default GITHUB_TOKEN cannot push to other repositories).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15 # arm64: builds the menu bar app; Go cross-compiles the rest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build Tailmon.app
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          plutil -replace CFBundleShortVersionString -string "$VERSION" menubar/Info.plist
+          (cd menubar && ./build.sh)
+          mkdir -p dist-app
+          ditto -c -k --keepParent menubar/dist/Tailmon.app "dist-app/Tailmon-$VERSION.zip"
+          git checkout menubar/Info.plist # goreleaser wants a clean tree
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+      - name: Update the Tailmon.app cask
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SHA=$(shasum -a 256 "dist-app/Tailmon-$VERSION.zip" | cut -d' ' -f1)
+          git clone "https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/barathanaslan/homebrew-tailmon.git" tap
+          mkdir -p tap/Casks
+          sed -e "s/__VERSION__/$VERSION/" -e "s/__SHA256__/$SHA/" \
+            packaging/tailmon-app.rb.tmpl > tap/Casks/tailmon-app.rb
+          cd tap
+          git config user.name tailmon-release
+          git config user.email barathanaslan@users.noreply.github.com
+          git add Casks/tailmon-app.rb
+          git commit -m "tailmon-app $VERSION" && git push || echo "cask unchanged"

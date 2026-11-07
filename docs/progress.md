@@ -2,6 +2,8 @@
 
 ## Current phase
 
+**v0.3.0 (2026-11-07, branch `v3`)**: native menu bar label, agent `/fleet`, lite samples, every disk with label/kind, disk I/O and NVIDIA power/fan, new dropdown design, `tailmon service install|uninstall|status`, GoReleaser release pipeline (Homebrew tap, Scoop bucket, deb/rpm, Tailmon.app cask). Installed on the Mac mini only; the Windows box agent is updated in a separate window. Plan: `docs/plans/v3.md`; numbers: `docs/plans/v3-measurements.md` (closed-menu CPU −87 %).
+
 **v2 tailmon MVP shipped and verified live (2026-07-10)** — see the dated entry at the bottom of this file. Everything between here and that entry is v1 (Python) history; the v1 stack itself is archived on the `v1-python` branch and is no longer on `main`.
 
 ## Status

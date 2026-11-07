@@ -1,0 +1,16 @@
+# systemd USER unit shipped by the deb/rpm packages. Enable per user:
+#   systemctl --user enable --now tailmon
+#   loginctl enable-linger $USER    # keep it running while logged out
+# `tailmon service install` writes an equivalent unit to ~/.config/systemd/user.
+[Unit]
+Description=tailmon agent (tailnet resource monitor)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/tailmon agent
+Restart=always
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=default.target

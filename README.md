@@ -166,9 +166,34 @@ reads.
 
 ## Install
 
+From a release (after the first tagged release):
+
+```sh
+# macOS / Linux (Homebrew)
+brew install barathanaslan/tailmon/tailmon
+tailmon service install                 # or: brew services start tailmon
+brew install --cask barathanaslan/tailmon/tailmon-app   # menu bar app (Apple Silicon, macOS 14+)
+
+# Windows (Scoop), then in an elevated shell:
+scoop bucket add tailmon https://github.com/barathanaslan/scoop-tailmon
+scoop install tailmon
+tailmon service install
+
+# Debian/Ubuntu or Fedora: the .deb / .rpm from the release page, then
+systemctl --user enable --now tailmon   # or: tailmon service install
+```
+
+`tailmon service install | uninstall | status` is the one way the agent is
+registered everywhere: a user LaunchAgent on macOS, an ONSTART scheduled task
+running as SYSTEM on Windows (below-normal priority, no 72h limit), a systemd
+user unit on Linux. Releases are built by GoReleaser from a `v*` tag
+(`.github/workflows/release.yml`).
+
+From source:
+
 ```sh
 ./build.sh                  # dist/ binaries for darwin/arm64, windows/amd64, linux/amd64
-./deploy/install-macos.sh   # user LaunchAgent (no sudo) on a Mac
+./deploy/install-macos.sh   # ~/bin/tailmon + tailmon service install (no sudo)
 ```
 
 Windows and fleet details: [deploy/README.md](deploy/README.md).
