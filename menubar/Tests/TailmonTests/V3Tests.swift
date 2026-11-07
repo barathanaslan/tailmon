@@ -79,7 +79,7 @@ final class V3Tests: XCTestCase {
     func testDiskTags() {
         let c = Stats.Disk(mount: "C:\\", freeGb: 598, totalGb: 1862, label: "Windows", fstype: "ntfs", kind: "internal")
         XCTAssertEqual(Fmt.diskTag(c), "C")
-        XCTAssertEqual(Fmt.diskName(c), "Windows")
+        XCTAssertNil(Fmt.diskName(c))
         XCTAssertEqual(Fmt.diskTooltip(c), "C: Windows · dahili · ntfs · 598 G boş")
         let hd = Stats.Disk(mount: "/", freeGb: 110, totalGb: 460, label: "HD", fstype: "apfs", kind: "internal")
         XCTAssertEqual(Fmt.diskTag(hd), "Disk")

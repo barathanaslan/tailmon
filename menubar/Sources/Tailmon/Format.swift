@@ -100,10 +100,11 @@ enum Fmt {
         return nil
     }
 
-    /// Dimmed name on the bar's right: nothing for the system/root volume,
-    /// the volume name for every other one (Windows drives: their label).
+    /// Dimmed name on the bar's right: only for extra (non-root) macOS/Linux
+    /// volumes. Windows drives are named by their letter; the label stays in
+    /// the tooltip.
     static func diskName(_ d: Stats.Disk) -> String? {
-        if driveLetter(d) != nil { return d.label?.isEmpty == false ? d.label : nil }
+        if driveLetter(d) != nil { return nil }
         if d.mount == "/" { return nil }
         if let l = d.label, !l.isEmpty { return l }
         return (d.mount as NSString).lastPathComponent
