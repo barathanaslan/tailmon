@@ -23,7 +23,7 @@ Packages:
 |---|---|
 | `cmd/tailmon` | subcommand dispatch: TUI (default), `agent`, `sample`, `json`, `version` |
 | `internal/sample` | one bounded snapshot of the local machine (platform files per OS) |
-| `internal/agent` | HTTP server, single-flight 1s caches (full, lite, fleet; 30s discovery); soak test lives here |
+| `internal/agent` | HTTP server, single-flight 1s caches (full, lite, fleet; 10s discovery); soak test lives here |
 | `internal/port` | the agent port (7020), shared by agent and aggregate |
 | `internal/discover` | `tailscale status --json` → Self + agent-capable peers |
 | `internal/aggregate` | parallel fan-out used by `tailmon json`, the TUI and the agent's `/fleet` |
@@ -44,7 +44,7 @@ v1 leaked memory on a MacBook for about ten days. v2's hard rules:
 1. The agent samples **on demand** only. `GET /stats` triggers a sample;
    requests within 1s share one result via a single-flight cache
    (`internal/agent/cache.go`, one slot each for full sample, lite sample,
-   fleet report; discovery is cached 30s). No tickers, no history in the
+   fleet report; discovery is cached 10s). No tickers, no history in the
    agent — only ONE previous CPU counter reading (lite CPU% delta). Idle
    agent = 0% CPU, flat RSS. The agent runs at lowered priority (nice +10 /
    BELOW_NORMAL_PRIORITY_CLASS) so it never competes with training.

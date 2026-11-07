@@ -11,6 +11,8 @@ import IOKit
 struct LocalSample: Equatable {
     var cpuPct: Double?
     var ramPct: Double?
+    var ramUsedMb: UInt64?
+    var ramTotalMb: UInt64?
     var pressure: String?
     var gpuPct: Double?
 }
@@ -24,8 +26,10 @@ final class LocalSampler {
     }
 
     func sample() -> LocalSample {
-        LocalSample(cpuPct: cpuPercent(), ramPct: ramPercent(),
-                    pressure: pressureLevel(), gpuPct: gpuPercent())
+        let ram = memory()
+        return LocalSample(
+            cpuPct: cpuPercent(), ramPct: ram?.pct, ramUsedMb: ram?.usedMb, ramTotalMb: ram?.totalMb,
+            pressure: pressureLevel(), gpuPct: gpuPercent())
     }
 
     // MARK: CPU — delta of host-wide tick counters since the previous call.
@@ -59,7 +63,7 @@ final class LocalSampler {
 
     // MARK: RAM
 
-    private func ramPercent() -> Double? {
+    private func memory() -> (pct: Double, usedMb: UInt64, totalMb: UInt64)? {
         var stats = vm_statistics64_data_t()
         var count = mach_msg_type_number_t(
             MemoryLayout<vm_statistics64_data_t>.stride / MemoryLayout<integer_t>.stride)
@@ -73,9 +77,11 @@ final class LocalSampler {
         var size = MemoryLayout<UInt64>.size
         guard sysctlbyname("hw.memsize", &total, &size, nil, 0) == 0, total > 0 else { return nil }
         let page = UInt64(vm_kernel_page_size)
-        return Self.usedPercent(
-            total: total, freePages: UInt64(stats.free_count),
-            inactivePages: UInt64(stats.inactive_count), pageSize: page)
+        let free = UInt64(stats.free_count), inactive = UInt64(stats.inactive_count)
+        let available = min(total, (free + inactive) * page)
+        // Same MB rounding as the agent: total/1M and (total-available)/1M.
+        return (Self.usedPercent(total: total, freePages: free, inactivePages: inactive, pageSize: page),
+                (total - available) / 1024 / 1024, total / 1024 / 1024)
     }
 
     static func usedPercent(total: UInt64, freePages: UInt64, inactivePages: UInt64, pageSize: UInt64) -> Double {

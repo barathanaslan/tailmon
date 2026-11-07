@@ -125,7 +125,7 @@ struct HostCard: View {
     let result: HostResult
 
     var body: some View {
-        let s = result.stats!
+        let s = model.displayStats(result)!
         VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Circle().fill(Palette.live).frame(width: 6, height: 6)

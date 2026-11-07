@@ -38,7 +38,7 @@ IOKit and the new SwiftUI views); the app's own footprint
 | | v0.2.0 | v0.3.0 |
 |---|---|---|
 | Per `/stats` sample | 3: `ioreg`, `sysctl -n machdep.cpu.brand_string`, `memory_pressure -Q` | 1: `ioreg` (GPU name via sysctl syscall once; pressure via `kern.memorystatus_level`) |
-| Per menu-open poll, app side | 2: `tailmon json` + its `tailscale status --json` | 0 (the agent runs `tailscale status` at most once per 30 s) |
+| Per menu-open poll, app side | 2: `tailmon json` + its `tailscale status --json` | 0 (the agent runs `tailscale status` at most once per 10 s; 30 s when these numbers were taken) |
 | Menu closed, app side | 0 | 0 |
 
 Counts are from the code paths (no root tracing on this machine).

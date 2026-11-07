@@ -32,7 +32,7 @@ const DefaultPort = port.Default
 const (
 	sampleTimeout   = 10 * time.Second
 	fleetTimeout    = 8 * time.Second
-	discoverTTL     = 30 * time.Second
+	discoverTTL     = 10 * time.Second // a peer that just came online shows up within ~10s
 	discoverTimeout = 3 * time.Second
 )
 

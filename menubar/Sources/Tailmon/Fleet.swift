@@ -41,7 +41,11 @@ final class FleetModel: ObservableObject {
     private var fleetTask: Task<Void, Never>?
     private var probeTask: Task<Void, Never>?
     private let sampler = LocalSampler()
-    private var lastLocal = LocalSample()
+    /// The latest native reading of this Mac (label path). Also overlays
+    /// CPU/RAM/GPU on the local host card so it is never stale.
+    @Published private(set) var lastLocal = LocalSample()
+    private var lastReportData: Data?
+    private var lastPersistedAt: Date?
     private var lastIconInfo: IconInfo?
     private let probeSession: URLSession
     private let fleetSession: URLSession
@@ -89,6 +93,13 @@ final class FleetModel: ObservableObject {
         let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
         log.line("launch \(v ?? "?")")
 
+        restoreLastReport() // the first open shows the last view instantly
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.persistLastReport(force: true) }
+        }
+
         _ = sampler.sample() // prime CPU tick deltas
         labelTimer = makeTimer(Self.labelInterval) { $0.refreshLabel() }
         probeTimer = makeTimer(Self.probeInterval) { $0.probePeers() }
@@ -97,6 +108,7 @@ final class FleetModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
             self?.refreshLabel()
             self?.probePeers()
+            self?.refreshFleet(force: true) // one warm-up fetch: fresh data for the first open
         }
     }
 
@@ -116,6 +128,7 @@ final class FleetModel: ObservableObject {
         fleetTimer = nil
         if menuOpen {
             refreshLoginItemState()
+            refreshLabel() // fresh native numbers for the local card right away
             refreshFleet()
             fleetTimer = makeTimer(Self.fleetInterval) { $0.refreshFleet() }
         } else {
@@ -167,9 +180,9 @@ final class FleetModel: ObservableObject {
 
     private func refreshLabel() {
         let s = sampler.sample()
-        lastLocal = LocalSample(
-            cpuPct: s.cpuPct ?? lastLocal.cpuPct, // keep the last good CPU reading
-            ramPct: s.ramPct, pressure: s.pressure, gpuPct: s.gpuPct)
+        var next = s
+        next.cpuPct = s.cpuPct ?? lastLocal.cpuPct // keep the last good CPU reading
+        if next != lastLocal { lastLocal = next }
         renderIcon()
     }
 
@@ -269,16 +282,19 @@ final class FleetModel: ObservableObject {
 
     // MARK: - Fleet (menu open only)
 
-    private func refreshFleet() {
-        guard menuOpen, fleetTask == nil else { return }
+    private func refreshFleet(force: Bool = false) {
+        guard menuOpen || force, fleetTask == nil else { return }
+        if menuOpen && !force { refreshLabel() } // local card: native numbers every 2s while open
         let session = fleetSession
         fleetTask = Task { [weak self] in
             let result = await FleetModel.fetchFleet(session)
             guard let self, !Task.isCancelled else { return }
             self.fleetTask = nil
             switch result {
-            case .success(let r):
+            case .success(let (r, data)):
+                self.lastReportData = data
                 self.apply(r)
+                self.persistLastReport(force: false)
             case .failure(let e):
                 let msg = FleetModel.describe(e)
                 if self.fleetError != msg { self.log.line("fleet fetch failed: \(e)") }
@@ -316,13 +332,13 @@ final class FleetModel: ObservableObject {
         renderIcon()
     }
 
-    nonisolated private static func fetchFleet(_ session: URLSession) async -> Result<Report, Error> {
+    nonisolated private static func fetchFleet(_ session: URLSession) async -> Result<(Report, Data), Error> {
         do {
             let (data, resp) = try await session.data(from: fleetURL)
             if let http = resp as? HTTPURLResponse, http.statusCode != 200 {
                 throw FleetError.status(http.statusCode)
             }
-            return .success(try tailmonJSONDecoder().decode(Report.self, from: data))
+            return .success((try tailmonJSONDecoder().decode(Report.self, from: data), data))
         } catch {
             return .failure(error)
         }
@@ -347,7 +363,55 @@ final class FleetModel: ObservableObject {
         return "Filo bilgisi alınamadı: \(e.localizedDescription)"
     }
 
+    // MARK: - Last report on disk (one file, bounded)
+
+    static var lastReportURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Tailmon/last-fleet.json")
+    }
+
+    /// Written at most every 30s while reports arrive, and on quit.
+    private func persistLastReport(force: Bool) {
+        guard let data = lastReportData else { return }
+        if !force, let at = lastPersistedAt, Date().timeIntervalSince(at) < 30 { return }
+        let url = Self.lastReportURL
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if (try? data.write(to: url, options: .atomic)) != nil { lastPersistedAt = Date() }
+    }
+
+    /// Shows the last saved report without touching rates or the disk memory
+    /// (it is old data): the header shows its age until a fresh one arrives.
+    private func restoreLastReport() {
+        let url = Self.lastReportURL
+        guard let data = try? Data(contentsOf: url),
+              let r = try? tailmonJSONDecoder().decode(Report.self, from: data) else { return }
+        let saved = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+            .contentModificationDate ?? Date.distantPast
+        report = r
+        receivedAt = saved
+        hosts = agents.visible(r.hosts)
+    }
+
     // MARK: - View helpers
+
+    /// Stats as shown: the local host's CPU, RAM and GPU utilization come
+    /// from the native reading (fresher than any report, never stale).
+    func displayStats(_ h: HostResult) -> Stats? {
+        guard var s = h.stats else { return nil }
+        guard h.source == "local" else { return s }
+        if let c = lastLocal.cpuPct { s.cpu.percent = c }
+        if let used = lastLocal.ramUsedMb, let total = lastLocal.ramTotalMb {
+            s.mem.usedMb = used
+            s.mem.totalMb = total
+        }
+        if let p = lastLocal.pressure { s.mem.pressure = p }
+        if let g = lastLocal.gpuPct, var gpus = s.gpu, !gpus.isEmpty {
+            gpus[0].utilPct = g
+            s.gpu = gpus
+        }
+        return s
+    }
 
     func isExpanded(_ h: HostResult) -> Bool {
         procsExpanded[HostKey.of(h)] ?? (h.source == "local")
