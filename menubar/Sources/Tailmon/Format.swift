@@ -42,13 +42,23 @@ enum Fmt {
     }
 
     /// Bytes per second: "84 KB/s", "1.2 MB/s", "210 MB/s".
+    /// Three significant digits: "6.00 KB/s", "88.8 KB/s", "880 KB/s",
+    /// "1.20 MB/s"; "0 KB/s" when idle. At most 9 characters, so a fixed slot
+    /// never reflows.
     static func rate(_ bps: Double) -> String {
-        let kb = max(0, bps) / 1024
-        if kb < 1000 { return String(format: "%.0f KB/s", kb) }
-        let mb = kb / 1024
-        if mb < 10 { return String(format: "%.1f MB/s", mb) }
-        if mb < 1000 { return String(format: "%.0f MB/s", mb) }
-        return String(format: "%.1f GB/s", mb / 1024)
+        var v = max(0, bps) / 1024
+        if v < 0.005 { return "0 KB/s" }
+        for unit in ["KB/s", "MB/s", "GB/s"] {
+            if v < 999.5 || unit == "GB/s" { return sig3(v) + " " + unit }
+            v /= 1024
+        }
+        return ""
+    }
+
+    static func sig3(_ v: Double) -> String {
+        if v < 9.995 { return String(format: "%.2f", v) }
+        if v < 99.95 { return String(format: "%.1f", v) }
+        return String(format: "%.0f", v)
     }
 
     /// Uptime: "23g 20s", "9s 12dk", "41dk".
@@ -76,33 +86,43 @@ enum Fmt {
         }
     }
 
-    /// The disk's label-column text: "C" for Windows drives, "HD" for the Mac
-    /// root, "/" for a Linux root, else the first two letters of the label.
+    /// The disk's label-column text: the drive letter on Windows ("C"),
+    /// "Disk" for every volume elsewhere.
     static func diskTag(_ d: Stats.Disk) -> String {
+        driveLetter(d) ?? "Disk"
+    }
+
+    static func driveLetter(_ d: Stats.Disk) -> String? {
         let m = d.mount
         if m.count >= 2, m.dropFirst().hasPrefix(":"), let c = m.first, c.isLetter {
             return String(c).uppercased()
         }
-        if m == "/" { return d.label == "HD" ? "HD" : "/" }
-        let name = (d.label?.isEmpty == false ? d.label! : (m as NSString).lastPathComponent)
-        return String(name.prefix(2)).uppercased()
+        return nil
     }
 
-    /// Tooltip on the disk tag: "C: Windows · dahili", "HD · dahili".
+    /// Dimmed name on the bar's right: nothing for the system/root volume,
+    /// the volume name for every other one (Windows drives: their label).
+    static func diskName(_ d: Stats.Disk) -> String? {
+        if driveLetter(d) != nil { return d.label?.isEmpty == false ? d.label : nil }
+        if d.mount == "/" { return nil }
+        if let l = d.label, !l.isEmpty { return l }
+        return (d.mount as NSString).lastPathComponent
+    }
+
+    /// Tooltip: "C: Windows · dahili · ntfs · 598 G boş", "sistem diski · dahili · apfs · 110 G boş".
     static func diskTooltip(_ d: Stats.Disk) -> String {
-        var name = d.mount
-        if let l = d.label, !l.isEmpty {
-            if name.count == 3, name.hasSuffix(":\\") {
-                name = String(name.prefix(2)) + " " + l
-            } else if name == "/" && l == "HD" {
-                name = "HD"
-            } else {
-                name = l
-            }
+        var name: String
+        if let letter = driveLetter(d) {
+            name = letter + ":" + (d.label.map { $0.isEmpty ? "" : " " + $0 } ?? "")
+        } else if d.mount == "/" {
+            name = "sistem diski"
+        } else {
+            name = diskName(d) ?? d.mount
         }
         var parts = [name]
         if let k = kind(d.kind) { parts.append(k) }
         if let f = d.fstype, !f.isEmpty { parts.append(f) }
+        parts.append(diskFree(d.freeGb))
         return parts.joined(separator: " · ")
     }
 

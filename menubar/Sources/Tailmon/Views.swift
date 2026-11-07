@@ -50,12 +50,7 @@ struct FleetView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             }
             ForEach(liveHosts) { HostCard(result: $0) }
-            if !otherHosts.isEmpty {
-                VStack(alignment: .leading, spacing: 5) {
-                    ForEach(otherHosts) { OfflineRow(result: $0) }
-                }
-                .padding(.horizontal, 10).padding(.vertical, 2)
-            }
+            ForEach(otherHosts) { OfflineRow(result: $0) }
         }
         .padding(10)
         .frame(width: 340, alignment: .topLeading)
@@ -203,7 +198,8 @@ struct MetricsGrid: View {
                     RowLabel(Fmt.diskTag(d)).help(Fmt.diskTooltip(d))
                     InBar(fills: [(d.totalGb > 0 ? d.used / d.totalGb : 0, Palette.disk)],
                           left: Fmt.diskPair(used: d.used, total: d.totalGb),
-                          right: Fmt.diskFree(d.freeGb))
+                          right: Fmt.diskName(d))
+                        .help(Fmt.diskTooltip(d))
                 }
             }
         }
@@ -350,28 +346,45 @@ struct InBar: View {
     }
 }
 
+/// "ağ ↓ 6.00 KB/s ↑ 4.00 KB/s   disk ↓ 880 KB/s ↑ 386 KB/s". Every value
+/// sits right-aligned in a fixed slot, so nothing moves when digits change.
 struct RatesLine: View {
     let rates: Rates?
 
+    static let slot: CGFloat = 50
+
     var body: some View {
         if let r = rates {
-            HStack(spacing: 14) {
-                pair("ağ", r.netRx, r.netTx)
+            HStack(spacing: 0) {
+                group("ağ", r.netRx, r.netTx)
                 if let rd = r.diskRead, let wr = r.diskWrite {
-                    pair("disk", rd, wr) // ↓ read, ↑ write
+                    group("disk", rd, wr) // ↓ read, ↑ write
+                        .padding(.leading, 12)
                 }
                 Spacer(minLength: 0)
             }
             .font(.system(size: 10))
+            .lineLimit(1)
         }
     }
 
-    /// "ağ ↓ 1.2 MB/s  ↑ 84 KB/s" — thin spaces between arrow and number.
-    private func pair(_ title: String, _ down: Double, _ up: Double) -> some View {
-        (Text("\(title)  ↓\u{2009}").foregroundColor(.secondary)
-            + Text(Fmt.rate(down)).fontWeight(.medium)
-            + Text("  ↑\u{2009}").foregroundColor(.secondary)
-            + Text(Fmt.rate(up)).fontWeight(.medium))
+    private func group(_ title: String, _ down: Double, _ up: Double) -> some View {
+        HStack(spacing: 0) {
+            Text(title).foregroundStyle(.secondary).frame(width: 24, alignment: .leading)
+            arrow("↓")
+            value(down)
+            arrow("↑").padding(.leading, 4)
+            value(up)
+        }
+    }
+
+    private func arrow(_ a: String) -> some View {
+        Text(a).foregroundStyle(.secondary)
+    }
+
+    private func value(_ v: Double) -> some View {
+        Text(Fmt.rate(v)).fontWeight(.medium)
+            .frame(width: Self.slot, alignment: .trailing)
     }
 }
 
@@ -424,19 +437,22 @@ struct ProcessList: View {
 
 // MARK: - Offline / no-agent row
 
+/// An offline / agent-less host: the same card as a live host, header only.
 struct OfflineRow: View {
     let result: HostResult
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Circle().fill(result.status == "offline" ? Color.secondary.opacity(0.5) : .orange)
+            Circle().fill(result.status == "offline" ? Color.secondary.opacity(0.6) : .orange)
                 .frame(width: 6, height: 6)
                 .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
-            Text(result.host).font(.system(size: 11, weight: .medium)).lineLimit(1)
+            Text(result.host).font(.system(size: 12, weight: .semibold)).lineLimit(1)
             Text(Fmt.osName(result.os ?? result.stats?.os)).font(.system(size: 11))
             Spacer(minLength: 0)
         }
         .foregroundStyle(.secondary)
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 9).fill(.quaternary.opacity(0.35)))
         .help(result.status == "offline" ? "çevrimdışı" : "açık · ajan yanıt vermiyor")
     }
 }

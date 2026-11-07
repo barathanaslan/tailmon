@@ -53,9 +53,14 @@ final class V3Tests: XCTestCase {
         XCTAssertEqual(Fmt.diskFree(16793), "16.4 T boş")
         XCTAssertEqual(Fmt.procMem(149), "149 M")
         XCTAssertEqual(Fmt.procMem(11468.8), "11.2 G")
-        XCTAssertEqual(Fmt.rate(84 * 1024), "84 KB/s")
-        XCTAssertEqual(Fmt.rate(1.2 * 1024 * 1024), "1.2 MB/s")
+        XCTAssertEqual(Fmt.rate(6 * 1024), "6.00 KB/s")
+        XCTAssertEqual(Fmt.rate(84 * 1024), "84.0 KB/s")
+        XCTAssertEqual(Fmt.rate(880 * 1024), "880 KB/s")
+        XCTAssertEqual(Fmt.rate(999.7 * 1024), "0.98 MB/s")
+        XCTAssertEqual(Fmt.rate(1.2 * 1024 * 1024), "1.20 MB/s")
         XCTAssertEqual(Fmt.rate(210 * 1024 * 1024), "210 MB/s")
+        XCTAssertEqual(Fmt.rate(0), "0 KB/s")
+        XCTAssertLessThanOrEqual(Fmt.rate(88.8 * 1024 * 1024).count, 9)
         XCTAssertEqual(Fmt.age(2), "2 sn önce")
     }
 
@@ -72,17 +77,22 @@ final class V3Tests: XCTestCase {
     }
 
     func testDiskTags() {
-        let c = Stats.Disk(mount: "C:\\", freeGb: 1, totalGb: 2, label: "Windows", kind: "internal")
+        let c = Stats.Disk(mount: "C:\\", freeGb: 598, totalGb: 1862, label: "Windows", fstype: "ntfs", kind: "internal")
         XCTAssertEqual(Fmt.diskTag(c), "C")
-        XCTAssertEqual(Fmt.diskTooltip(c), "C: Windows · dahili")
-        let hd = Stats.Disk(mount: "/", freeGb: 1, totalGb: 2, label: "HD", fstype: "apfs", kind: "internal")
-        XCTAssertEqual(Fmt.diskTag(hd), "HD")
-        XCTAssertEqual(Fmt.diskTooltip(hd), "HD · dahili · apfs")
+        XCTAssertEqual(Fmt.diskName(c), "Windows")
+        XCTAssertEqual(Fmt.diskTooltip(c), "C: Windows · dahili · ntfs · 598 G boş")
+        let hd = Stats.Disk(mount: "/", freeGb: 110, totalGb: 460, label: "HD", fstype: "apfs", kind: "internal")
+        XCTAssertEqual(Fmt.diskTag(hd), "Disk")
+        XCTAssertNil(Fmt.diskName(hd))
+        XCTAssertEqual(Fmt.diskTooltip(hd), "sistem diski · dahili · apfs · 110 G boş")
         let linuxRoot = Stats.Disk(mount: "/", freeGb: 1, totalGb: 2, fstype: "ext4")
-        XCTAssertEqual(Fmt.diskTag(linuxRoot), "/")
+        XCTAssertEqual(Fmt.diskTag(linuxRoot), "Disk")
+        XCTAssertNil(Fmt.diskName(linuxRoot))
         let ext = Stats.Disk(mount: "/Volumes/Elements", freeGb: 1, totalGb: 2, label: "Elements", kind: "external")
-        XCTAssertEqual(Fmt.diskTag(ext), "EL")
-        XCTAssertEqual(Fmt.diskTooltip(ext), "Elements · harici")
+        XCTAssertEqual(Fmt.diskTag(ext), "Disk")
+        XCTAssertEqual(Fmt.diskName(ext), "Elements")
+        let data = Stats.Disk(mount: "/mnt/data", freeGb: 1, totalGb: 2)
+        XCTAssertEqual(Fmt.diskName(data), "data")
     }
 
     // The box's D: (a WD drive that sleeps or is disabled) disappears from a
