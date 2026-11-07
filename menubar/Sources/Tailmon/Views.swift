@@ -178,8 +178,7 @@ struct MetricsGrid: View {
             GridRow {
                 RowLabel("CPU")
                 InBar(fills: [(stats.cpu.percent / 100, Palette.cpu)],
-                      left: Fmt.pct(stats.cpu.percent),
-                      right: stats.cpu.load1.map { String(format: "yük %.1f", $0) })
+                      left: Fmt.pct(stats.cpu.percent), right: nil)
             }
             GridRow {
                 RowLabel("RAM")
