@@ -15,21 +15,29 @@ replacement. The menu bar label shows the local machine's live **CPU / GPU /
 RAM percentages** (Stats-style stacked columns, tightly packed; RAM tinted by
 memory pressure) plus **one letter per other tailnet device** colored by
 status — green live, orange no-agent, dim offline (letters learned on the
-first menu open, then persisted). The dropdown shows every fleet host with
-full stats **and a top-processes list per host** ("what is actually
-running"). A device only joins the fleet once it has answered with a live
+first menu open, then persisted). The dropdown shows every live fleet host as
+a card of labelled bars with their numbers inside (CPU, RAM + swap, GPU
+utilization joined with its memory, every disk), network and disk rates, and
+a **top-processes list per host** ("what is actually running"); offline hosts
+are one compact line at the bottom. A disk that drops out of a live host's
+report (an external drive asleep or disabled) keeps showing with its last
+reading. A device only joins the fleet once it has answered with a live
 agent; tailnet nodes that never ran tailmon (phones, other people's machines)
 are not shown at all. Strictly read-only: no power controls, no kill — by design.
 
-Efficiency contract: menu closed → one localhost poll + a few tiny peer
-/health probes per 15s, **zero subprocess spawns**. Menu open → `tailmon json
---top 10` every 3s, one in flight max. No history kept; log capped at 1 MB.
+Efficiency contract: menu closed → the label's numbers are read natively
+every 5s (a few Mach/sysctl calls and one IORegistry read: **no HTTP, no
+subprocesses, no process scans**), plus one tiny /health probe per known peer
+every 60s. Menu open → one `GET 127.0.0.1:7020/fleet?top=10` every 2s, one in
+flight max; the local agent fans out and caches. No history kept (one previous
+counter snapshot per host for rates); log capped at 1 MB.
 
 ```
 cd menubar && ./install.sh     # builds Tailmon.app, installs to /Applications
 ```
-Launch-at-login is registered automatically on first launch (manage it in
-System Settings → Login Items; the app never re-forces it).
+Launch-at-login is registered automatically on first launch; toggle it from
+the dropdown's `⋯` menu (Girişte başlat). The app never re-forces it. Needs
+macOS 14+ and a v0.3.0 agent on the same Mac (for `/fleet`).
 
 ## Design rules
 
@@ -95,7 +103,8 @@ localhost only.
 
 ## JSON
 
-`GET http://<host>:7020/stats` and `tailmon sample` print schema 1:
+`GET http://<host>:7020/stats` and `tailmon sample` print schema 1
+(`?top=N` for up to 25 processes; `?lite=1` skips process enumeration):
 
 ```json
 {
@@ -104,23 +113,33 @@ localhost only.
   "cpu": {"percent": 4.6, "cores": 28, "load1": 5.1},
   "mem": {"total_mb": 98304, "used_mb": 17102, "available_mb": 81201,
           "pressure": "normal", "swap_used_mb": 2460},
-  "gpu": [{"name": "Apple M3 Ultra", "util_pct": 7,
-           "vram_used_mb": null, "vram_total_mb": null, "temp_c": null}],
-  "disks": [{"mount": "/", "free_gb": 209.4, "total_gb": 926.4}],
+  "gpu": [{"name": "Apple M3 Ultra", "util_pct": 7, "vram_used_mb": 690,
+           "vram_total_mb": null, "temp_c": null, "unified": true}],
+  "disks": [{"mount": "/", "free_gb": 209.4, "total_gb": 926.4, "used_gb": 717.0,
+             "label": "HD", "fstype": "apfs", "kind": "internal"}],
   "net": {"rx_bytes": 211981786521, "tx_bytes": 55753167396},
+  "disk_io": {"read_bytes": 3947653914624, "write_bytes": 3106902585344},
   "top_procs": [{"pid": 4242, "name": "python3", "cpu_pct": 88.1, "mem_mb": 4096}],
-  "agent": {"version": "0.2.0", "rss_mb": 9.4, "goroutines": 8, "uptime_sec": 3600}
+  "agent": {"version": "0.3.0", "rss_mb": 9.4, "goroutines": 8, "uptime_sec": 3600}
 }
 ```
 
-Fields a platform can't provide are `null`, never fabricated (`load1` on
-Windows, `vram_*` on unified-memory Macs, `pressure` outside macOS).
+Fields a platform can't provide are `null` or omitted, never fabricated
+(`load1` on Windows, `vram_total_mb` on unified-memory Macs, where
+`vram_used_mb` is the GPU's in-use share of system memory; `pressure` outside
+macOS). NVIDIA GPUs add `power_w`, `power_limit_w`, `fan_pct`. Disks: macOS
+reports the root as `/` labelled `HD` (usage of the Data volume) plus every
+real volume under `/Volumes`; Windows every fixed/removable drive letter;
+Linux every real filesystem. `kind` is internal / external / removable.
+Free-space queries only — directories are never walked. All 0.3.0 fields are
+additive; schema stays 1.
 
 **macOS memory note:** `used_mb` is `total - available` — the same sense of
 "used" as Activity Monitor. Naive `free`-style numbers on macOS wildly
 underreport (file cache etc.); this schema avoids the classic "the tool says
 2 GB used when the machine is really at 8 GB" misread. `pressure` buckets
-`memory_pressure -Q`'s free percentage into normal / warn / critical.
+`kern.memorystatus_level` (the free percentage `memory_pressure -Q` prints)
+into normal / warn / critical.
 
 GPU utilization on Apple Silicon comes from the IOAccelerator registry
 (`ioreg`), which needs **no root** — unlike `powermetrics`. NVIDIA data comes
@@ -141,7 +160,9 @@ from `nvidia-smi` (PATH, then the usual install locations).
 ```
 
 The local machine is sampled in-process, so it appears even when no local
-agent is running.
+agent is running. The agent serves the same document at `GET /fleet?top=N`
+to **loopback clients only** (403 otherwise) — that is what the menu bar app
+reads.
 
 ## Install
 

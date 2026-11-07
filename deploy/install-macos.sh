@@ -21,10 +21,17 @@ mkdir -p "$HOME/bin" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
 install -m 755 "$BIN_SRC" "$BIN_DST"
 sed "s|__HOME__|$HOME|g" deploy/com.bosphorify.tailmon.plist > "$PLIST_DST"
 
-# Reload cleanly whether or not a previous version is running.
-launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$PLIST_DST"
-launchctl kickstart -k "gui/$(id -u)/$LABEL"
+# Reload cleanly whether or not a previous version is running. bootout
+# returns before the old job is fully gone, and bootstrapping in that window
+# fails with "5: Input/output error" — wait for it to disappear first.
+DOMAIN="gui/$(id -u)"
+launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+for _ in $(seq 1 50); do
+  launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1 || break
+  sleep 0.2
+done
+launchctl bootstrap "$DOMAIN" "$PLIST_DST"
+launchctl kickstart -k "$DOMAIN/$LABEL"
 
 echo "installed: $BIN_DST"
 echo "agent loaded: $LABEL (logs: ~/Library/Logs/tailmon-agent.log)"

@@ -7,7 +7,7 @@ import (
 )
 
 var nvidiaSMIQueryArgs = []string{
-	"--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+	"--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,power.limit,fan.speed",
 	"--format=csv,noheader,nounits",
 }
 
@@ -28,9 +28,11 @@ func queryNvidiaSMI(ctx context.Context, candidates []string) []GPU {
 
 // parseNvidiaSMI parses `nvidia-smi --format=csv,noheader,nounits` output:
 //
-//	NVIDIA GeForce RTX 5070 Ti, 3, 512, 16303, 41
+//	NVIDIA GeForce RTX 5070 Ti, 3, 512, 16303, 41, 18.52, 300.00, 0
 //
-// "[N/A]" or unparsable fields become null, never fabricated.
+// Columns 6-8 (power draw W, power limit W, fan %) are optional so output
+// from the 5-column query still parses. "[N/A]" or unparsable fields become
+// null, never fabricated.
 func parseNvidiaSMI(out string) []GPU {
 	gpus := []GPU{}
 	for _, line := range strings.Split(out, "\n") {
@@ -39,7 +41,7 @@ func parseNvidiaSMI(out string) []GPU {
 			continue
 		}
 		fields := strings.Split(line, ",")
-		if len(fields) != 5 {
+		if len(fields) != 5 && len(fields) != 8 {
 			continue
 		}
 		for i := range fields {
@@ -57,6 +59,19 @@ func parseNvidiaSMI(out string) []GPU {
 		}
 		if v, ok := parseSMIFloat(fields[4]); ok {
 			g.TempC = &v
+		}
+		if len(fields) == 8 {
+			if v, ok := parseSMIFloat(fields[5]); ok {
+				v = round1(v)
+				g.PowerW = &v
+			}
+			if v, ok := parseSMIFloat(fields[6]); ok {
+				v = round1(v)
+				g.PowerLimitW = &v
+			}
+			if v, ok := parseSMIFloat(fields[7]); ok {
+				g.FanPct = &v
+			}
 		}
 		gpus = append(gpus, g)
 	}

@@ -1,5 +1,5 @@
 // Menu bar label rendering: Stats-style stacked CPU/GPU/RAM columns for the
-// LOCAL machine (tightly packed — owner preference), followed by one letter
+// LOCAL machine (read natively by LocalSampler) (tightly packed — owner preference), followed by one letter
 // per OTHER tailnet device colored by status (green live, orange no-agent,
 // dim offline). Letters come from hostnames with the owner-name prefix
 // stripped: "barathans-5070" -> 5, "barathan's macbook" -> M.
@@ -29,6 +29,16 @@ struct IconInfo: Equatable {
             gpu: s.gpu?.first?.utilPct.map { Int($0.rounded()) },
             ram: ram,
             pressure: s.mem.pressure,
+            peers: peers)
+    }
+
+    /// The label from the native local sample (menu bar, every 5s).
+    static func make(local: LocalSample, peers: [PeerBadge]) -> IconInfo {
+        IconInfo(
+            cpu: local.cpuPct.map { Int($0.rounded()) },
+            gpu: local.gpuPct.map { Int($0.rounded()) },
+            ram: local.ramPct.map { Int($0.rounded()) },
+            pressure: local.pressure,
             peers: peers)
     }
 

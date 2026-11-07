@@ -328,4 +328,3 @@ func localHostname() string {
 	h, _, _ = strings.Cut(h, ".")
 	return strings.ToLower(h)
 }
-

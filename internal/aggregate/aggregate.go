@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/barathanaslan/tailmon/internal/agent"
 	"github.com/barathanaslan/tailmon/internal/discover"
+	"github.com/barathanaslan/tailmon/internal/port"
 	"github.com/barathanaslan/tailmon/internal/sample"
 )
 
@@ -86,6 +86,16 @@ func FetchStats(ctx context.Context, client *http.Client, ip string, port, top i
 	return &s, nil
 }
 
+// Source says where a report's pieces come from. The zero value of each
+// field means the CLI default: tailscale discovery, the local agent (or an
+// in-process sample) for this machine, port.Default, a fresh client.
+type Source struct {
+	Hosts  func(ctx context.Context) ([]discover.Host, error)
+	Local  func(ctx context.Context, top int) (*sample.Stats, error)
+	Port   int
+	Client *http.Client // reused across calls when set (keep-alive)
+}
+
 // Collect discovers peers and queries every reachable agent in parallel. The
 // local machine is sampled in-process — it shows up even with no local agent
 // running. With no tailscale CLI it degrades to localhost only.
@@ -94,26 +104,43 @@ func Collect(ctx context.Context) *Report { return CollectTop(ctx, 0) }
 // CollectTop is Collect with an explicit top-process count per host
 // (0 = default).
 func CollectTop(ctx context.Context, top int) *Report {
+	return Source{}.Collect(ctx, top)
+}
+
+// Collect builds one report from src.
+func (src Source) Collect(ctx context.Context, top int) *Report {
+	hostsFn, localFn, p, client := src.Hosts, src.Local, src.Port, src.Client
+	if hostsFn == nil {
+		hostsFn = discover.Hosts
+	}
+	if localFn == nil {
+		localFn = localStats
+	}
+	if p == 0 {
+		p = port.Default
+	}
+	if client == nil {
+		client = NewClient()
+		defer client.CloseIdleConnections()
+	}
+
 	report := &Report{Schema: sample.SchemaVersion}
-	hosts, err := discover.Hosts(ctx)
+	hosts, err := hostsFn(ctx)
 	if err != nil {
 		// Degrade gracefully: local sample only.
 		report.Note = "tailscale unavailable (" + err.Error() + "); local sample only"
 		hosts = nil
 	}
 
-	client := NewClient()
 	results := make([]HostResult, 0, len(hosts)+1)
-
 	if len(hosts) == 0 {
-		results = append(results, localResult(ctx, discover.Host{Self: true}, top))
+		results = append(results, localResult(ctx, discover.Host{Self: true}, top, localFn))
 	} else {
 		results = results[:len(hosts)]
 		var wg sync.WaitGroup
 		for i, h := range hosts {
 			if h.Self {
-				results[i] = localResult(ctx, h, top)
-				continue
+				continue // sampled below, concurrently with the peers
 			}
 			if !h.Online {
 				results[i] = HostResult{Host: h.Name, IP: h.IP, OS: h.OS, Status: StatusOffline}
@@ -123,7 +150,7 @@ func CollectTop(ctx context.Context, top int) *Report {
 			go func(i int, h discover.Host) {
 				defer wg.Done()
 				r := HostResult{Host: h.Name, IP: h.IP, OS: h.OS, Source: "agent"}
-				stats, err := FetchStats(ctx, client, h.IP, agent.DefaultPort, top)
+				stats, err := FetchStats(ctx, client, h.IP, p, top)
 				if err != nil {
 					r.Status, r.Source, r.Error = StatusNoAgent, "", err.Error()
 				} else {
@@ -132,29 +159,22 @@ func CollectTop(ctx context.Context, top int) *Report {
 				results[i] = r
 			}(i, h)
 		}
+		for i, h := range hosts {
+			if h.Self {
+				results[i] = localResult(ctx, h, top, localFn)
+			}
+		}
 		wg.Wait()
 	}
-	client.CloseIdleConnections()
 
 	report.GeneratedAt = time.Now().UTC()
 	report.Hosts = results
 	return report
 }
 
-// localResult gets this machine's stats. It asks the local agent first —
-// that shares the agent's 1s single-flight cache with every other viewer
-// (no double sampling, and no 500ms measurement window when the answer is
-// already warm). Only when no agent runs does it sample in-process.
-func localResult(ctx context.Context, h discover.Host, top int) HostResult {
+func localResult(ctx context.Context, h discover.Host, top int, localFn func(context.Context, int) (*sample.Stats, error)) HostResult {
 	r := HostResult{Host: h.Name, IP: h.IP, OS: h.OS, Status: StatusLive, Source: "local"}
-	stats, err := fetchLocalAgent(ctx, top)
-	if err != nil {
-		if top > 0 {
-			stats, err = sample.CollectTop(ctx, top)
-		} else {
-			stats, err = sample.Collect(ctx)
-		}
-	}
+	stats, err := localFn(ctx, top)
 	if err != nil {
 		r.Status, r.Source, r.Error = StatusNoAgent, "", err.Error()
 		return r
@@ -166,10 +186,24 @@ func localResult(ctx context.Context, h discover.Host, top int) HostResult {
 	return r
 }
 
+// localStats gets this machine's stats. It asks the local agent first —
+// that shares the agent's 1s single-flight cache with every other viewer
+// (no double sampling, and no 500ms measurement window when the answer is
+// already warm). Only when no agent runs does it sample in-process.
+func localStats(ctx context.Context, top int) (*sample.Stats, error) {
+	if stats, err := fetchLocalAgent(ctx, top); err == nil {
+		return stats, nil
+	}
+	if top > 0 {
+		return sample.CollectTop(ctx, top)
+	}
+	return sample.Collect(ctx)
+}
+
 func fetchLocalAgent(ctx context.Context, top int) (*sample.Stats, error) {
 	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	client := &http.Client{Timeout: 2 * time.Second}
 	defer client.CloseIdleConnections()
-	return FetchStats(cctx, client, "127.0.0.1", agent.DefaultPort, top)
+	return FetchStats(cctx, client, "127.0.0.1", port.Default, top)
 }

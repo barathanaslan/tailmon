@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/host"
 	"github.com/shirou/gopsutil/v4/mem"
 	gnet "github.com/shirou/gopsutil/v4/net"
@@ -69,6 +70,7 @@ type Stats struct {
 	GPU       []GPU     `json:"gpu"`
 	Disks     []Disk    `json:"disks"`
 	Net       Net       `json:"net"`
+	DiskIO    *DiskIO   `json:"disk_io,omitempty"` // additive (0.3.0)
 	TopProcs  []Proc    `json:"top_procs"`
 	Agent     Agent     `json:"agent"`
 }
@@ -88,17 +90,46 @@ type Mem struct {
 }
 
 type GPU struct {
-	Name        string   `json:"name"`
-	UtilPct     *float64 `json:"util_pct"`
-	VRAMUsedMB  *uint64  `json:"vram_used_mb"`  // null on unified-memory Macs
-	VRAMTotalMB *uint64  `json:"vram_total_mb"` // null on unified-memory Macs
+	Name    string   `json:"name"`
+	UtilPct *float64 `json:"util_pct"`
+	// On unified-memory Macs vram_used_mb is the GPU's in-use share of system
+	// memory and vram_total_mb is null (there is no separate pool).
+	VRAMUsedMB  *uint64  `json:"vram_used_mb"`
+	VRAMTotalMB *uint64  `json:"vram_total_mb"`
 	TempC       *float64 `json:"temp_c"`
+	// Additive (0.3.0). Unified: memory is shared with the CPU (Apple Silicon).
+	Unified     bool     `json:"unified,omitempty"`
+	PowerW      *float64 `json:"power_w,omitempty"`
+	PowerLimitW *float64 `json:"power_limit_w,omitempty"`
+	FanPct      *float64 `json:"fan_pct,omitempty"`
 }
 
+// Disk is one mounted volume. Free-space queries only (statfs /
+// GetDiskFreeSpaceEx) — directories are never walked.
 type Disk struct {
 	Mount   string  `json:"mount"`
 	FreeGB  float64 `json:"free_gb"`
 	TotalGB float64 `json:"total_gb"`
+	// Additive (0.3.0).
+	UsedGB float64 `json:"used_gb,omitempty"` // omitted when 0: relayed old-agent disks must not read as empty
+	Label  string  `json:"label,omitempty"`
+	FSType string  `json:"fstype,omitempty"`
+	Kind   string  `json:"kind,omitempty"` // internal | external | removable | network
+}
+
+// Disk kinds.
+const (
+	KindInternal  = "internal"
+	KindExternal  = "external"
+	KindRemovable = "removable"
+	KindNetwork   = "network"
+)
+
+// DiskIO: cumulative bytes since boot, summed over physical disks. Clients
+// compute rates from two readings.
+type DiskIO struct {
+	ReadBytes  uint64 `json:"read_bytes"`
+	WriteBytes uint64 `json:"write_bytes"`
 }
 
 type Net struct {
@@ -136,7 +167,18 @@ func Collect(ctx context.Context) (*Stats, error) {
 // CollectTop is Collect with an explicit top-process count (clamped to
 // [1, MaxTopProcs]).
 func CollectTop(ctx context.Context, topN int) (*Stats, error) {
-	topN = ClampTop(topN)
+	return collect(ctx, ClampTop(topN), false)
+}
+
+// CollectLite is a snapshot WITHOUT process enumeration: cpu, mem, gpu,
+// disks, net, disk_io, uptime, agent. top_procs is an empty list. CPU% comes
+// from the counter delta since the previous sample (any kind) when that is
+// recent; otherwise a short liteWindow is measured.
+func CollectLite(ctx context.Context) (*Stats, error) {
+	return collect(ctx, 0, true)
+}
+
+func collect(ctx context.Context, topN int, lite bool) (*Stats, error) {
 	s := &Stats{
 		Schema:   SchemaVersion,
 		Host:     shortHostname(),
@@ -147,26 +189,36 @@ func CollectTop(ctx context.Context, topN int) (*Stats, error) {
 		TopProcs: []Proc{},
 	}
 
-	// --- CPU + per-process CPU share one measurement window. ---
-	procs, _ := process.ProcessesWithContext(ctx)
-	// Prime deltas: gopsutil computes percent-since-last-call for interval 0.
-	_, _ = cpu.PercentWithContext(ctx, 0, false)
-	for _, p := range procs {
-		_, _ = p.PercentWithContext(ctx, 0)
-	}
-	select {
-	case <-time.After(cpuWindow):
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-	if pcts, err := cpu.PercentWithContext(ctx, 0, false); err == nil && len(pcts) == 1 {
-		s.CPU.Percent = round1(pcts[0])
+	if lite {
+		pct, err := liteCPUPercent(ctx)
+		if err != nil {
+			return nil, err
+		}
+		s.CPU.Percent = round1(pct)
+	} else {
+		// --- CPU + per-process CPU share one measurement window. ---
+		procs, _ := process.ProcessesWithContext(ctx)
+		before, _ := cpuTimes(ctx)
+		for _, p := range procs {
+			_, _ = p.PercentWithContext(ctx, 0) // prime per-process deltas
+		}
+		select {
+		case <-time.After(cpuWindow):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		if after, err := cpuTimes(ctx); err == nil {
+			if before != nil {
+				s.CPU.Percent = round1(busyPercent(*before, *after))
+			}
+			rememberCPU(*after)
+		}
+		s.TopProcs = topProcs(ctx, procs, topN)
 	}
 	if n, err := cpu.CountsWithContext(ctx, true); err == nil {
 		s.CPU.Cores = n
 	}
 	s.CPU.Load1 = loadAvg1(ctx)
-	s.TopProcs = topProcs(ctx, procs, topN)
 
 	// --- Memory. used = total - available: matches Activity Monitor and
 	// avoids the "only 2GB used when it's really 8GB" misread. ---
@@ -185,6 +237,7 @@ func CollectTop(ctx context.Context, topN int) (*Stats, error) {
 	// --- Platform-specific GPU + disks. ---
 	s.GPU = collectGPUs(ctx)
 	s.Disks = platformDisks(ctx)
+	s.DiskIO = diskIO(ctx)
 
 	// --- Net counters (cumulative since boot). ---
 	if io, err := gnet.IOCountersWithContext(ctx, false); err == nil && len(io) > 0 {
@@ -282,4 +335,40 @@ func round1(v float64) float64 {
 
 func bytesToGB1(b uint64) float64 {
 	return round1(float64(b) / (1024 * 1024 * 1024))
+}
+
+// newDisk fills the derived fields from byte counts.
+func newDisk(mount, label, fstype, kind string, total, free uint64) Disk {
+	used := uint64(0)
+	if total > free {
+		used = total - free
+	}
+	return Disk{
+		Mount: mount, Label: label, FSType: fstype, Kind: kind,
+		TotalGB: bytesToGB1(total), FreeGB: bytesToGB1(free), UsedGB: bytesToGB1(used),
+	}
+}
+
+// diskIO sums cumulative read/write bytes over physical disks. One cheap
+// kernel query (IOKit registry on darwin, /proc/diskstats on linux, perf
+// counters on windows) — no subprocesses. Nil when unavailable.
+func diskIO(ctx context.Context) *DiskIO {
+	counters, err := disk.IOCountersWithContext(ctx)
+	if err != nil || len(counters) == 0 {
+		return nil
+	}
+	var out DiskIO
+	n := 0
+	for name, c := range counters {
+		if !physicalDiskName(name) {
+			continue
+		}
+		out.ReadBytes += c.ReadBytes
+		out.WriteBytes += c.WriteBytes
+		n++
+	}
+	if n == 0 {
+		return nil
+	}
+	return &out
 }
