@@ -87,6 +87,7 @@ final class FleetModel: ObservableObject {
         agents = AgentRegistry(
             keys: Set(UserDefaults.standard.stringArray(forKey: Self.agentsKey) ?? []))
         memory = HostMemory.load()
+        memory.normalizeKeys()
         memory.prune()
         registerLoginItemOnce()
         refreshLoginItemState()

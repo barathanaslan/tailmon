@@ -116,7 +116,7 @@ final class V3Tests: XCTestCase {
         staleD.stale = true
         var m2 = m
         m2.recordLive(host: "box", disks: [c, staleD], now: t0.addingTimeInterval(60))
-        XCTAssertEqual(m2.disks["box"]?["D:\\"]?.disk, d)
+        XCTAssertEqual(m2.disks["box"]?["D:"]?.disk, d)
         XCTAssertEqual(m2.merged(host: "box", live: [c, staleD]).map(\.mount), ["C:\\", "D:\\"])
 
         // Encodes/decodes for UserDefaults.
@@ -127,6 +127,27 @@ final class V3Tests: XCTestCase {
         m.recordLive(host: "box", disks: [c], now: t0.addingTimeInterval(31 * 86_400))
         m.prune(now: t0.addingTimeInterval(31 * 86_400))
         XCTAssertEqual(m.merged(host: "box", live: []).map(\.mount), ["C:\\"])
+    }
+
+    // 0.2.0 agents reported Windows drives as "C:", 0.3.0 as "C:\\": the old
+    // cache entries must not show as a second C / E.
+    func testMountKeysNormalized() {
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        var m = HostMemory()
+        m.disks["box"] = [
+            "C:": .init(disk: Stats.Disk(mount: "C:", freeGb: 1, totalGb: 2), seen: t0),
+            "E:": .init(disk: Stats.Disk(mount: "E:", freeGb: 1, totalGb: 2), seen: t0),
+            "/Volumes/X/": .init(disk: Stats.Disk(mount: "/Volumes/X/", freeGb: 1, totalGb: 2), seen: t0),
+        ]
+        m.normalizeKeys()
+        let live = [Stats.Disk(mount: "C:\\", freeGb: 1, totalGb: 2), Stats.Disk(mount: "e:\\", freeGb: 1, totalGb: 2),
+                    Stats.Disk(mount: "D:\\", freeGb: 1, totalGb: 2, stale: true)]
+        XCTAssertEqual(m.merged(host: "box", live: live).map(\.mount), ["C:\\", "D:\\", "e:\\", "/Volumes/X/"].sorted {
+            $0.localizedStandardCompare($1) == .orderedAscending })
+        m.recordLive(host: "box", disks: live, now: t0.addingTimeInterval(1))
+        XCTAssertEqual(Set(m.disks["box"]!.keys), ["C:", "E:", "/Volumes/X"])
+        XCTAssertEqual(HostMemory.mountKey("/"), "/")
+        XCTAssertEqual(HostMemory.mountKey("c:\\"), "C:")
     }
 
     func testMergedOrderRootFirst() {

@@ -53,3 +53,21 @@ func TestRememberDisks(t *testing.T) {
 		t.Errorf("entries unseen for 30 days must be dropped: %+v", got)
 	}
 }
+
+func TestMountKey(t *testing.T) {
+	for in, want := range map[string]string{`C:\`: "C:", "c:": "C:", "C:": "C:", "/": "/", "/Volumes/X/": "/Volumes/X", "/mnt/data": "/mnt/data"} {
+		if got := mountKey(in); got != want {
+			t.Errorf("mountKey(%q) = %q, want %q", in, got, want)
+		}
+	}
+	// A live "c:\" must not also report a remembered "C:" as stale.
+	t.Setenv("TAILMON_STATE_DIR", t.TempDir())
+	resetDiskMemo()
+	defer resetDiskMemo()
+	now := time.Now()
+	rememberDisks([]Disk{{Mount: "C:", TotalGB: 1, Kind: KindInternal}}, now)
+	got := rememberDisks([]Disk{{Mount: `c:\`, TotalGB: 1, Kind: KindInternal}}, now)
+	if len(got) != 1 || got[0].Stale {
+		t.Errorf("duplicate/stale C: %+v", got)
+	}
+}

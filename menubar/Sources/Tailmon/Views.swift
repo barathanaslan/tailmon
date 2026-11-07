@@ -348,7 +348,9 @@ struct InBar: View {
 struct RatesLine: View {
     let rates: Rates?
 
-    static let slot: CGFloat = 50
+    /// Fits the widest value, "88.8 MB/s" (50.4pt at 10pt medium); the
+    /// whole line is 296pt of the card's 300.
+    static let slot: CGFloat = 52
 
     var body: some View {
         if let r = rates {
@@ -356,7 +358,7 @@ struct RatesLine: View {
                 group("ağ", r.netRx, r.netTx)
                 if let rd = r.diskRead, let wr = r.diskWrite {
                     group("disk", rd, wr) // ↓ read, ↑ write
-                        .padding(.leading, 12)
+                        .padding(.leading, 8)
                 }
                 Spacer(minLength: 0)
             }
@@ -367,7 +369,8 @@ struct RatesLine: View {
 
     private func group(_ title: String, _ down: Double, _ up: Double) -> some View {
         HStack(spacing: 0) {
-            Text(title).foregroundStyle(.secondary).frame(width: 24, alignment: .leading)
+            Text(title).foregroundStyle(.secondary).fixedSize()
+                .frame(width: title.count > 2 ? 24 : 16, alignment: .leading)
             arrow("↓")
             value(down)
             arrow("↑").padding(.leading, 4)

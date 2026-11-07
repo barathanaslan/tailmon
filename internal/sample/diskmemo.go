@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -39,7 +40,7 @@ type diskMemoEntry struct {
 var diskMemo struct {
 	sync.Mutex
 	loaded  bool
-	entries map[string]diskMemoEntry // by mount
+	entries map[string]diskMemoEntry // by mountKey
 	written time.Time
 }
 
@@ -59,6 +60,19 @@ func diskMemoPath() string {
 	return filepath.Join(dir, "tailmon", "disks.json")
 }
 
+// mountKey is a volume's identity: Windows drive letters case-insensitive
+// with or without the trailing backslash ("C:", `C:\`, `c:\` -> "C:"), other
+// mounts without trailing slashes ("/" stays "/").
+func mountKey(m string) string {
+	for len(m) > 1 && (strings.HasSuffix(m, "/") || strings.HasSuffix(m, `\`)) {
+		m = m[:len(m)-1]
+	}
+	if len(m) == 2 && m[1] == ':' {
+		return strings.ToUpper(m)
+	}
+	return m
+}
+
 func rememberable(d Disk) bool {
 	return d.Kind != KindRemovable || d.TotalGB >= diskMemoBigGB
 }
@@ -76,7 +90,11 @@ func rememberDisks(live []Disk, now time.Time) []Disk {
 			var stored []diskMemoEntry
 			if json.Unmarshal(b, &stored) == nil {
 				for _, e := range stored {
-					diskMemo.entries[e.Disk.Mount] = e
+					k := mountKey(e.Disk.Mount)
+					if have, ok := diskMemo.entries[k]; ok && have.SeenAt.After(e.SeenAt) {
+						continue
+					}
+					diskMemo.entries[k] = e
 				}
 			}
 		}
@@ -85,19 +103,20 @@ func rememberDisks(live []Disk, now time.Time) []Disk {
 	changed := false
 	liveMounts := map[string]bool{}
 	for _, d := range live {
-		liveMounts[d.Mount] = true
+		k := mountKey(d.Mount)
+		liveMounts[k] = true
 		if !rememberable(d) {
-			if _, ok := diskMemo.entries[d.Mount]; ok {
-				delete(diskMemo.entries, d.Mount) // that letter/mount is now a stick
+			if _, ok := diskMemo.entries[k]; ok {
+				delete(diskMemo.entries, k) // that letter/mount is now a stick
 				changed = true
 			}
 			continue
 		}
-		if _, ok := diskMemo.entries[d.Mount]; !ok {
+		if _, ok := diskMemo.entries[k]; !ok {
 			changed = true
 		}
 		d.Stale, d.SeenAt = false, nil
-		diskMemo.entries[d.Mount] = diskMemoEntry{Disk: d, SeenAt: now}
+		diskMemo.entries[k] = diskMemoEntry{Disk: d, SeenAt: now}
 	}
 	for m, e := range diskMemo.entries {
 		if now.Sub(e.SeenAt) > diskMemoRetention {
@@ -112,7 +131,7 @@ func rememberDisks(live []Disk, now time.Time) []Disk {
 		}
 		sort.Slice(all, func(i, j int) bool { return all[i].SeenAt.After(all[j].SeenAt) })
 		for _, e := range all[diskMemoMax:] {
-			delete(diskMemo.entries, e.Disk.Mount)
+			delete(diskMemo.entries, mountKey(e.Disk.Mount))
 		}
 		changed = true
 	}

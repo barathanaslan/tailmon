@@ -20,10 +20,10 @@ struct HostMemory: Codable, Equatable {
         var known = disks[host] ?? [:]
         // Agent-reported stale disks are old readings: never refresh them here.
         for d in live where d.kind != "removable" && d.stale != true {
-            known[d.mount] = KnownDisk(disk: d, seen: now)
+            known[Self.mountKey(d.mount)] = KnownDisk(disk: d, seen: now)
         }
         // A disk that came back as removable must not linger from an older reading.
-        for d in live where d.kind == "removable" { known[d.mount] = nil }
+        for d in live where d.kind == "removable" { known[Self.mountKey(d.mount)] = nil }
         disks[host] = known.isEmpty ? nil : known
     }
 
@@ -32,14 +32,41 @@ struct HostMemory: Codable, Equatable {
     /// style. Root first, then by mount.
     func merged(host: String, live: [Stats.Disk]) -> [Stats.Disk] {
         var out = live
-        let liveMounts = Set(live.map(\.mount))
-        for (mount, k) in disks[host] ?? [:] where !liveMounts.contains(mount) {
+        // A remembered disk shows only when no live (or agent-stale) volume
+        // has the same normalized mount: "C:" (0.2.0 agents) == "C:\\" == "c:\\".
+        var shown = Set(live.map { Self.mountKey($0.mount) })
+        for (key, k) in disks[host] ?? [:] where !shown.contains(key) {
+            shown.insert(key)
             out.append(k.disk)
         }
         return out.sorted { a, b in
             if a.mount == "/" { return b.mount != "/" }
             if b.mount == "/" { return false }
             return a.mount.localizedStandardCompare(b.mount) == .orderedAscending
+        }
+    }
+
+    /// Volume identity: Windows drive letters case-insensitive with or
+    /// without the trailing backslash ("C:", "C:\\", "c:\\" -> "C:"); other
+    /// mounts without a trailing slash ("/" stays "/").
+    static func mountKey(_ m: String) -> String {
+        var k = m
+        while k.count > 1, k.hasSuffix("/") || k.hasSuffix("\\") { k.removeLast() }
+        if k.count == 2, k.hasSuffix(":"), let c = k.first, c.isLetter { return k.uppercased() }
+        return k
+    }
+
+    /// Re-keys entries saved before keys were normalized, keeping the most
+    /// recent reading per volume. Run once on load.
+    mutating func normalizeKeys() {
+        for (host, known) in disks {
+            var fixed: [String: KnownDisk] = [:]
+            for (mount, k) in known {
+                let key = Self.mountKey(mount)
+                if let have = fixed[key], have.seen >= k.seen { continue }
+                fixed[key] = k
+            }
+            disks[host] = fixed
         }
     }
 
