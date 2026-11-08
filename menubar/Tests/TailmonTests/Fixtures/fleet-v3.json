@@ -1,0 +1,363 @@
+{
+ "schema": 1,
+ "generated_at": "2026-11-07T10:31:27.60034Z",
+ "hosts": [
+  {
+   "host": "barathans-mini",
+   "ip": "100.108.255.119",
+   "os": "macOS",
+   "status": "live",
+   "source": "local",
+   "stats": {
+    "schema": 1,
+    "host": "mac-mini",
+    "os": "darwin",
+    "arch": "arm64",
+    "sampled_at": "2026-11-07T10:31:27.600338Z",
+    "uptime_sec": 2061879,
+    "cpu": {
+     "percent": 14,
+     "cores": 12,
+     "load1": 2.8
+    },
+    "mem": {
+     "total_mb": 32768,
+     "used_mb": 20679,
+     "available_mb": 12088,
+     "pressure": "normal",
+     "swap_used_mb": 1144
+    },
+    "gpu": [
+     {
+      "name": "Apple M6",
+      "util_pct": 38,
+      "vram_used_mb": 607,
+      "vram_total_mb": null,
+      "temp_c": null,
+      "unified": true
+     }
+    ],
+    "disks": [
+     {
+      "mount": "/",
+      "free_gb": 110.9,
+      "total_gb": 460.4,
+      "used_gb": 349.4,
+      "label": "HD",
+      "fstype": "apfs",
+      "kind": "internal"
+     }
+    ],
+    "net": {
+     "rx_bytes": 1449867278116,
+     "tx_bytes": 719210570849
+    },
+    "disk_io": {
+     "read_bytes": 3949416407040,
+     "write_bytes": 3108039266304
+    },
+    "top_procs": [
+     {
+      "pid": 3696,
+      "name": "Claude Helper",
+      "cpu_pct": 27.3,
+      "mem_mb": 109.1,
+      "command": "/Applications/Claude.app/Contents/Frameworks/Claude Helper.app/Contents/MacOS/Claude Helper --type=…"
+     },
+     {
+      "pid": 22655,
+      "name": "mediaanalysisd",
+      "cpu_pct": 23.7,
+      "mem_mb": 305,
+      "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
+     },
+     {
+      "pid": 15911,
+      "name": "textunderstandingd",
+      "cpu_pct": 17.6,
+      "mem_mb": 162,
+      "command": "/usr/libexec/textunderstandingd"
+     },
+     {
+      "pid": 12805,
+      "name": "Claude Helper (Renderer)",
+      "cpu_pct": 11.7,
+      "mem_mb": 719.3,
+      "command": "/Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Hel…"
+     },
+     {
+      "pid": 33167,
+      "name": "tailmon-new",
+      "cpu_pct": 1.7,
+      "mem_mb": 17.8,
+      "command": "/private/tmp/claude-501/-Users-barathanaslan-Projects-Claude/c743d208-df47-5ab5-a0e2-7b39013387fe/s…"
+     },
+     {
+      "pid": 13727,
+      "name": "Google Chrome Helper (Aperitif Renderer)",
+      "cpu_pct": 0.9,
+      "mem_mb": 896.2,
+      "command": "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/155.…"
+     },
+     {
+      "pid": 22314,
+      "name": "logioptionsplus_agent",
+      "cpu_pct": 0.8,
+      "mem_mb": 91.7,
+      "command": "/Library/Application Support/Logitech.localized/LogiOptionsPlus/logioptionsplus_agent.app/Contents/…"
+     },
+     {
+      "pid": 77338,
+      "name": "adb",
+      "cpu_pct": 0.7,
+      "mem_mb": 9,
+      "command": "/Users/barathanaslan/Library/Android/sdk/platform-tools/adb -a nodaemon server"
+     },
+     {
+      "pid": 23487,
+      "name": "com.apple.Virtualization.VirtualMachine",
+      "cpu_pct": 0.4,
+      "mem_mb": 1037.2,
+      "command": "/System/Library/Frameworks/Virtualization.framework/Versions/A/XPCServices/com.apple.Virtualization…"
+     },
+     {
+      "pid": 88906,
+      "name": "Google Chrome",
+      "cpu_pct": 0.4,
+      "mem_mb": 583.3,
+      "command": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+     }
+    ],
+    "agent": {
+     "version": "0.3.0",
+     "rss_mb": 19.1,
+     "goroutines": 9,
+     "uptime_sec": 2
+    }
+   }
+  },
+  {
+   "host": "barathans-5090",
+   "ip": "100.95.91.27",
+   "os": "windows",
+   "status": "live",
+   "source": "agent",
+   "stats": {
+    "schema": 1,
+    "host": "barathans-5090",
+    "os": "windows",
+    "arch": "amd64",
+    "sampled_at": "2026-11-07T10:31:27.600338Z",
+    "uptime_sec": 32000,
+    "cpu": {
+     "percent": 22.4,
+     "cores": 32,
+     "load1": null
+    },
+    "mem": {
+     "total_mb": 65307,
+     "used_mb": 30822,
+     "available_mb": 34485,
+     "pressure": null,
+     "swap_used_mb": 0
+    },
+    "gpu": [
+     {
+      "name": "NVIDIA GeForce RTX 5090",
+      "util_pct": 97,
+      "vram_used_mb": 29081,
+      "vram_total_mb": 32607,
+      "temp_c": 71,
+      "power_w": 548.3,
+      "power_limit_w": 575,
+      "fan_pct": 62
+     }
+    ],
+    "disks": [
+     {
+      "mount": "C:\\",
+      "free_gb": 598.2,
+      "total_gb": 1862.9,
+      "used_gb": 1264.7,
+      "label": "Windows",
+      "fstype": "ntfs",
+      "kind": "internal"
+     },
+     {
+      "mount": "E:\\",
+      "free_gb": 1228.4,
+      "total_gb": 3726.0,
+      "used_gb": 2497.6,
+      "label": "Data",
+      "fstype": "ntfs",
+      "kind": "internal"
+     }
+    ],
+    "net": {
+     "rx_bytes": 91234567890,
+     "tx_bytes": 1234567890
+    },
+    "disk_io": {
+     "read_bytes": 5234567890123,
+     "write_bytes": 1234567890123
+    },
+    "top_procs": [
+     {
+      "pid": 4242,
+      "name": "python",
+      "cpu_pct": 98.0,
+      "mem_mb": 11468.8,
+      "command": "E:\\Projects\\x\\.venv\\Scripts\\python.exe train.py"
+     },
+     {
+      "pid": 3100,
+      "name": "MsMpEng",
+      "cpu_pct": 2.8,
+      "mem_mb": 310.0
+     }
+    ],
+    "agent": {
+     "version": "0.3.0",
+     "rss_mb": 18.0,
+     "goroutines": 5,
+     "uptime_sec": 32000
+    }
+   }
+  },
+  {
+   "host": "barathans-macbook",
+   "ip": "100.80.159.96",
+   "os": "macOS",
+   "status": "offline",
+   "stats": null
+  },
+  {
+   "host": "tahalinux",
+   "ip": "100.83.190.72",
+   "os": "linux",
+   "status": "live",
+   "source": "agent",
+   "stats": {
+    "schema": 1,
+    "host": "tahalinux",
+    "os": "linux",
+    "arch": "amd64",
+    "sampled_at": "2026-11-07T10:31:26.516616788Z",
+    "uptime_sec": 341305,
+    "cpu": {
+     "percent": 0.2,
+     "cores": 32,
+     "load1": 0.1
+    },
+    "mem": {
+     "total_mb": 60798,
+     "used_mb": 16960,
+     "available_mb": 43838,
+     "pressure": null,
+     "swap_used_mb": 6
+    },
+    "gpu": [
+     {
+      "name": "AMD Radeon RX 9060 XT",
+      "util_pct": 0,
+      "vram_used_mb": 1100,
+      "vram_total_mb": 16304,
+      "temp_c": 25
+     },
+     {
+      "name": "AMD Radeon Graphics",
+      "util_pct": 0,
+      "vram_used_mb": 15,
+      "vram_total_mb": 2048,
+      "temp_c": 38
+     }
+    ],
+    "disks": [
+     {
+      "mount": "/",
+      "free_gb": 327.7,
+      "total_gb": 914.8,
+      "used_gb": 0
+     }
+    ],
+    "net": {
+     "rx_bytes": 314953299142,
+     "tx_bytes": 315002564061
+    },
+    "top_procs": [
+     {
+      "pid": 2975,
+      "name": "tailmon",
+      "cpu_pct": 3.9,
+      "mem_mb": 16.4,
+      "command": "/home/mtahasylmz/.local/bin/tailmon agent"
+     },
+     {
+      "pid": 10505,
+      "name": "claude-desktop",
+      "cpu_pct": 1.9,
+      "mem_mb": 230.3,
+      "command": "/usr/lib/claude-desktop/claude-desktop --type=gpu-process --ozone-platform=wayland --render-node-ov…"
+     },
+     {
+      "pid": 2739,
+      "name": "coolercontrold",
+      "cpu_pct": 1.9,
+      "mem_mb": 29.3,
+      "command": "/usr/bin/coolercontrold"
+     },
+     {
+      "pid": 2557094,
+      "name": "steam",
+      "cpu_pct": 1.9,
+      "mem_mb": 366.2,
+      "command": "/home/mtahasylmz/.steam/debian-installation/ubuntu12_32/steam -srt-logger-opened -nominidumps -nobr…"
+     },
+     {
+      "pid": 1,
+      "name": "systemd",
+      "cpu_pct": 0,
+      "mem_mb": 16.9,
+      "command": "/usr/lib/systemd/systemd --switched-root --system --deserialize=56 splash"
+     },
+     {
+      "pid": 2,
+      "name": "kthreadd",
+      "cpu_pct": 0,
+      "mem_mb": 0
+     },
+     {
+      "pid": 3,
+      "name": "pool_workqueue_release",
+      "cpu_pct": 0,
+      "mem_mb": 0
+     },
+     {
+      "pid": 4,
+      "name": "kworker/R-rcu_gp",
+      "cpu_pct": 0,
+      "mem_mb": 0
+     },
+     {
+      "pid": 5,
+      "name": "kworker/R-sync_wq",
+      "cpu_pct": 0,
+      "mem_mb": 0
+     },
+     {
+      "pid": 6,
+      "name": "kworker/R-kvfree_rcu_reclaim",
+      "cpu_pct": 0,
+      "mem_mb": 0
+     }
+    ],
+    "agent": {
+     "version": "0.2.0",
+     "rss_mb": 16.4,
+     "goroutines": 8,
+     "uptime_sec": 341297
+    }
+   }
+  }
+ ]
+}

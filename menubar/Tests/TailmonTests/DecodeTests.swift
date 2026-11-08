@@ -56,9 +56,9 @@ final class DecodeTests: XCTestCase {
         XCTAssertEqual(IconInfo.badgeLetter(for: "nothing-phone-3a"), "NP3")
     }
 
-    func testHumanDuration() {
-        XCTAssertEqual(humanDuration(59), "0m")
-        XCTAssertEqual(humanDuration(3_660), "1h1m")
-        XCTAssertEqual(humanDuration(90_000), "1d1h")
+    func testUptime() {
+        XCTAssertEqual(Fmt.uptime(59), "0dk")
+        XCTAssertEqual(Fmt.uptime(3_660), "1s 1dk")
+        XCTAssertEqual(Fmt.uptime(90_000), "1g 1s")
     }
 }

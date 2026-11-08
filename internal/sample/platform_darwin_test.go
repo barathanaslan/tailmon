@@ -1,6 +1,9 @@
 package sample
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestParseIoregDeviceUtil(t *testing.T) {
 	// Captured from a real M3 Ultra: PerformanceStatistics is one long line.
@@ -14,28 +17,64 @@ func TestParseIoregDeviceUtil(t *testing.T) {
 	}
 }
 
-func TestPressureFromFreePct(t *testing.T) {
+func TestParseIoregInUseMem(t *testing.T) {
+	out := `"PerformanceStatistics" = {"In use system memory (driver)"=0,"In use system memory"=693125120,"Device Utilization %"=45}`
+	v, ok := parseIoregInUseMem(out)
+	if !ok || v != 693125120 {
+		t.Errorf("got %v, %v", v, ok)
+	}
+	if _, ok := parseIoregInUseMem(`"In use system memory (driver)"=5`); ok {
+		t.Error("the (driver) key must not match")
+	}
+}
+
+func TestPressureFromLevel(t *testing.T) {
+	for _, c := range []struct {
+		lvl  int
+		want string
+	}{{94, "normal"}, {21, "normal"}, {20, "warn"}, {10, "warn"}, {9, "critical"}, {0, "critical"}} {
+		if got := pressureFromLevel(c.lvl); got == nil || *got != c.want {
+			t.Errorf("%d: want %q, got %v", c.lvl, c.want, got)
+		}
+	}
+}
+
+func TestWholeDisk(t *testing.T) {
+	for in, want := range map[string]string{"/dev/disk3s5": "disk3", "/dev/disk12s1s1": "disk12", "map auto_home": "", "/dev/disk4": "disk4"} {
+		if got := wholeDisk(in); got != want {
+			t.Errorf("wholeDisk(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestVolumeMount(t *testing.T) {
+	const local = 0x1000 // MNT_LOCAL
 	cases := []struct {
-		out  string
-		want string // "" = nil
+		mount, fs string
+		flags     uint32
+		want      bool
 	}{
-		{"System-wide memory free percentage: 94%\n", "normal"},
-		{"System-wide memory free percentage: 21%\n", "normal"},
-		{"System-wide memory free percentage: 20%\n", "warn"},
-		{"System-wide memory free percentage: 10%\n", "warn"},
-		{"System-wide memory free percentage: 9%\n", "critical"},
-		{"no such line", ""},
+		{"/Volumes/Elements", "exfat", local, true},
+		{"/Volumes/Backup", "apfs", local, true},
+		{"/Volumes/Share", "smbfs", 0, false},
+		{"/Volumes/Installer", "hfs", local | 0x00100000, false}, // nobrowse
+		{"/System/Volumes/Data", "apfs", local, false},
+		{"/Volumes/a/b", "apfs", local, false},
 	}
 	for _, c := range cases {
-		got := pressureFromFreePct(c.out)
-		if c.want == "" {
-			if got != nil {
-				t.Errorf("%q: want nil, got %q", c.out, *got)
-			}
-			continue
+		if got := volumeMount(c.mount, c.fs, c.flags); got != c.want {
+			t.Errorf("volumeMount(%q,%q) = %v, want %v", c.mount, c.fs, got, c.want)
 		}
-		if got == nil || *got != c.want {
-			t.Errorf("%q: want %q, got %v", c.out, c.want, got)
-		}
+	}
+}
+
+func TestPlatformDisksDarwin(t *testing.T) {
+	disks := platformDisks(context.Background())
+	if len(disks) == 0 || disks[0].Mount != "/" || disks[0].Label != "HD" {
+		t.Fatalf("root disk missing: %+v", disks)
+	}
+	d := disks[0]
+	if d.TotalGB <= 0 || d.UsedGB <= 0 || d.Kind != KindInternal || d.FSType != "apfs" {
+		t.Errorf("implausible root disk: %+v", d)
 	}
 }

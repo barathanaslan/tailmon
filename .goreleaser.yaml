@@ -1,0 +1,113 @@
+# Release: tag and push (git tag vX.Y.Z && git push origin vX.Y.Z), then
+# scripts/release.sh vX.Y.Z on the Mac (or the manual release workflow).
+# Local dry run:
+#   goreleaser release --snapshot --clean
+version: 2
+project_name: tailmon
+
+before:
+  hooks:
+    - go test ./...
+
+builds:
+  - id: tailmon
+    main: ./cmd/tailmon
+    binary: tailmon
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/barathanaslan/tailmon/internal/version.Version={{ .Version }}
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: tailmon
+    ids: [tailmon]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "tailmon_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE, README.md]
+
+checksum:
+  name_template: checksums.txt
+
+nfpms:
+  - id: tailmon
+    ids: [tailmon]
+    package_name: tailmon
+    file_name_template: "tailmon_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    vendor: barathanaslan
+    homepage: https://github.com/barathanaslan/tailmon
+    maintainer: Barathan Aslan <barathanaslan@users.noreply.github.com>
+    description: Tailnet-wide resource monitor (agent, TUI, JSON for AI tools).
+    license: MIT
+    formats: [deb, rpm]
+    bindir: /usr/bin
+    contents:
+      # Per-user agent: `systemctl --user enable --now tailmon`
+      # (or `tailmon service install`, which writes the same unit to ~/.config).
+      - src: deploy/tailmon.service
+        dst: /usr/lib/systemd/user/tailmon.service
+
+brews:
+  - name: tailmon
+    ids: [tailmon]
+    repository:
+      owner: barathanaslan
+      name: homebrew-tailmon
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/barathanaslan/tailmon
+    description: Tailnet-wide resource monitor (agent, TUI, JSON for AI tools)
+    license: MIT
+    commit_author:
+      name: tailmon-release
+      email: barathanaslan@users.noreply.github.com
+    install: |
+      bin.install "tailmon"
+    service: |
+      run [opt_bin/"tailmon", "agent"]
+      keep_alive true
+      log_path var/"log/tailmon-agent.log"
+      error_log_path var/"log/tailmon-agent.log"
+    caveats: |
+      Start the agent at login (pick ONE of these, both use port 7020):
+        brew services start tailmon
+        tailmon service install
+      The menu bar app: brew install --cask barathanaslan/tailmon/tailmon-app
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/tailmon version")
+
+scoops:
+  - name: tailmon
+    ids: [tailmon]
+    repository:
+      owner: barathanaslan
+      name: scoop-tailmon
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/barathanaslan/tailmon
+    description: Tailnet-wide resource monitor (agent, TUI, JSON for AI tools)
+    license: MIT
+    commit_author:
+      name: tailmon-release
+      email: barathanaslan@users.noreply.github.com
+    post_install:
+      - 'Write-Host "Run the agent at boot from an elevated shell - tailmon service install"'
+
+release:
+  github:
+    owner: barathanaslan
+    name: tailmon
+  extra_files:
+    # Built by the workflow before goreleaser runs (menubar/build.sh + ditto).
+    - glob: ./dist-app/Tailmon-*.zip
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^docs:", "^test:"]

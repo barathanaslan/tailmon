@@ -14,4 +14,4 @@ open -a /Applications/Tailmon.app
 
 echo "installed + launched: /Applications/Tailmon.app"
 echo "logs: ~/Library/Logs/tailmon-menubar.log"
-echo "tip: enable 'Launch at login' from the dropdown footer"
+echo "launch at login: on by default; toggle in the ⋯ menu (Girişte başlat)"

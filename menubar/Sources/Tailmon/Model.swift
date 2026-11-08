@@ -69,11 +69,14 @@ struct Stats: Decodable {
     var host: String
     var os: String
     var arch: String?
+    var sampledAt: String?
     var uptimeSec: UInt64?
     var cpu: CPU
     var mem: Mem
     var gpu: [GPU]?
     var disks: [Disk]?
+    var net: Net?
+    var diskIo: DiskIO?
     var topProcs: [Proc]?
     var agent: AgentSelf?
 
@@ -97,12 +100,43 @@ struct Stats: Decodable {
         var vramUsedMb: UInt64?
         var vramTotalMb: UInt64?
         var tempC: Double?
+        // 0.3.0 additions (absent from older agents).
+        var unified: Bool?
+        var powerW: Double?
+        var powerLimitW: Double?
+        var fanPct: Double?
     }
 
-    struct Disk: Decodable {
+    struct Disk: Codable, Equatable {
         var mount: String
         var freeGb: Double
         var totalGb: Double
+        // 0.3.0 additions (absent from older agents).
+        var usedGb: Double?
+        var label: String?
+        var fstype: String?
+        var kind: String?
+        /// The agent's last reading of a volume that is absent now (asleep /
+        /// disabled drive); shown in the same style as live disks.
+        var stale: Bool?
+        var seenAt: String?
+
+        /// Older agents have no used_gb (and a relaying agent may have
+        /// written it as 0): fall back to total - free.
+        var used: Double {
+            if let u = usedGb, u > 0 || totalGb - freeGb < 0.1 { return u }
+            return max(0, totalGb - freeGb)
+        }
+    }
+
+    struct Net: Decodable {
+        var rxBytes: UInt64
+        var txBytes: UInt64
+    }
+
+    struct DiskIO: Decodable {
+        var readBytes: UInt64
+        var writeBytes: UInt64
     }
 
     struct Proc: Decodable, Identifiable {
@@ -120,6 +154,17 @@ struct Stats: Decodable {
         var rssMb: Double?
         var goroutines: Int?
     }
+
+    var sampledDate: Date? { sampledAt.flatMap(parseISODate) }
+}
+
+/// Parses the agent's RFC 3339 timestamps (with or without fractional seconds).
+func parseISODate(_ s: String) -> Date? {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let d = f.date(from: s) { return d }
+    f.formatOptions = [.withInternetDateTime]
+    return f.date(from: s)
 }
 
 func tailmonJSONDecoder() -> JSONDecoder {

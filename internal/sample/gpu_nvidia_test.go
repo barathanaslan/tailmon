@@ -49,3 +49,28 @@ func TestParseNvidiaSMIGarbage(t *testing.T) {
 		t.Errorf("empty input should give empty non-nil slice, got %#v", gpus)
 	}
 }
+
+func TestParseNvidiaSMIPowerFan(t *testing.T) {
+	out := "NVIDIA GeForce RTX 5090, 97, 29081, 32607, 71, 548.27, 575.00, 62\n" +
+		"Other GPU, 0, 10, 8192, 30, [N/A], [N/A], [N/A]\n"
+	gpus := parseNvidiaSMI(out)
+	if len(gpus) != 2 {
+		t.Fatalf("want 2 gpus, got %d", len(gpus))
+	}
+	g := gpus[0]
+	if g.PowerW == nil || *g.PowerW != 548.3 {
+		t.Errorf("power = %v", g.PowerW)
+	}
+	if g.PowerLimitW == nil || *g.PowerLimitW != 575 {
+		t.Errorf("power limit = %v", g.PowerLimitW)
+	}
+	if g.FanPct == nil || *g.FanPct != 62 {
+		t.Errorf("fan = %v", g.FanPct)
+	}
+	if o := gpus[1]; o.PowerW != nil || o.PowerLimitW != nil || o.FanPct != nil {
+		t.Errorf("[N/A] power/fan must be null: %+v", o)
+	}
+	if gpus[1].TempC == nil || *gpus[1].TempC != 30 {
+		t.Errorf("temp = %v", gpus[1].TempC)
+	}
+}

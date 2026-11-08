@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 # Install the tailmon agent as a user LaunchAgent (no sudo anywhere).
-# Copies the built binary to ~/bin/tailmon, renders + loads the plist.
+# Copies the built binary to ~/bin/tailmon, then `tailmon service install`.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-LABEL="com.bosphorify.tailmon"
 BIN_SRC="dist/tailmon-darwin-arm64"
 BIN_DST="$HOME/bin/tailmon"
-PLIST_DST="$HOME/Library/LaunchAgents/$LABEL.plist"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "error: macOS only" >&2; exit 1
@@ -17,15 +15,11 @@ if [[ ! -f "$BIN_SRC" ]]; then
   ./build.sh
 fi
 
-mkdir -p "$HOME/bin" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
+mkdir -p "$HOME/bin"
 install -m 755 "$BIN_SRC" "$BIN_DST"
-sed "s|__HOME__|$HOME|g" deploy/com.bosphorify.tailmon.plist > "$PLIST_DST"
 
-# Reload cleanly whether or not a previous version is running.
-launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$PLIST_DST"
-launchctl kickstart -k "gui/$(id -u)/$LABEL"
+# The LaunchAgent itself (plist, launchctl bootstrap) is written by the
+# binary, the same code every install route uses.
+"$BIN_DST" service install
 
-echo "installed: $BIN_DST"
-echo "agent loaded: $LABEL (logs: ~/Library/Logs/tailmon-agent.log)"
-echo "check: curl -s http://127.0.0.1:7020/health"
+echo "check: $BIN_DST service status"

@@ -4,6 +4,7 @@
 //	tailmon agent     HTTP agent serving local stats on :7020
 //	tailmon sample    print one local snapshot as JSON and exit
 //	tailmon json      aggregate all reachable tailnet agents into one JSON doc
+//	tailmon service   install | uninstall | status of the agent background service
 //	tailmon version   print version
 package main
 
@@ -20,6 +21,7 @@ import (
 	"github.com/barathanaslan/tailmon/internal/agent"
 	"github.com/barathanaslan/tailmon/internal/aggregate"
 	"github.com/barathanaslan/tailmon/internal/sample"
+	"github.com/barathanaslan/tailmon/internal/service"
 	"github.com/barathanaslan/tailmon/internal/tui"
 	"github.com/barathanaslan/tailmon/internal/version"
 )
@@ -31,6 +33,9 @@ Usage:
   tailmon agent        HTTP agent on the Tailscale IP + 127.0.0.1 (--port, default 7020)
   tailmon sample       one local stats snapshot as JSON to stdout
   tailmon json         combined JSON for all reachable agents (for AI tools)
+  tailmon service install|uninstall|status
+                       run the agent at boot/login: macOS LaunchAgent, Windows
+                       scheduled task (elevated shell), Linux systemd user unit
   tailmon version      print version
 `
 
@@ -64,6 +69,8 @@ func main() {
 		top := fs.Int("top", 0, "top processes per host (default agent setting, max 25)")
 		_ = fs.Parse(args)
 		err = runJSON(ctx, *top)
+	case "service":
+		err = runService(args)
 	case "version":
 		fmt.Println("tailmon " + version.Version)
 	case "help", "-h", "--help":
@@ -94,6 +101,27 @@ func runSample(ctx context.Context, top int) error {
 
 func runJSON(ctx context.Context, top int) error {
 	return printJSON(aggregate.CollectTop(ctx, top))
+}
+
+func runService(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: tailmon service install|uninstall|status [--port N] [--bin PATH]")
+	}
+	action := args[0]
+	fs := flag.NewFlagSet("service "+action, flag.ExitOnError)
+	port := fs.Int("port", agent.DefaultPort, "agent port")
+	bin := fs.String("bin", "", "tailmon binary the service runs (default: this one)")
+	_ = fs.Parse(args[1:])
+	switch action {
+	case "install":
+		return service.Install(service.Options{Binary: *bin, Port: *port})
+	case "uninstall":
+		return service.Uninstall()
+	case "status":
+		fmt.Println(service.Status(*port))
+		return nil
+	}
+	return fmt.Errorf("unknown service action %q (install, uninstall, status)", action)
 }
 
 func printJSON(v any) error {
