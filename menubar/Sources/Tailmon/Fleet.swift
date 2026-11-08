@@ -111,6 +111,13 @@ final class FleetModel: ObservableObject {
             self?.probePeers()
             self?.refreshFleet(force: true) // one warm-up fetch: fresh data for the first open
         }
+        // No local agent (fresh cask install): register it from the bundled binary.
+        let session = probeSession
+        Task { [weak self] in
+            guard let msg = await AgentSetup.ensureAgent(session: session) else { return }
+            self?.log.line(msg)
+            self?.refreshFleet(force: true)
+        }
     }
 
     private func makeTimer(_ interval: TimeInterval, _ body: @escaping @MainActor (FleetModel) -> Void) -> Timer {

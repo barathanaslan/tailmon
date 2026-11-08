@@ -105,18 +105,19 @@ func runJSON(ctx context.Context, top int) error {
 
 func runService(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: tailmon service install|uninstall|status [--port N] [--bin PATH]")
+		return fmt.Errorf("usage: tailmon service install|uninstall|status [--port N] [--bin PATH] [--if-bin PATH]")
 	}
 	action := args[0]
 	fs := flag.NewFlagSet("service "+action, flag.ExitOnError)
 	port := fs.Int("port", agent.DefaultPort, "agent port")
-	bin := fs.String("bin", "", "tailmon binary the service runs (default: this one)")
+	bin := fs.String("bin", "", "install: tailmon binary the service runs (default: this one)")
+	ifBin := fs.String("if-bin", "", "uninstall: only if the service runs this binary")
 	_ = fs.Parse(args[1:])
 	switch action {
 	case "install":
 		return service.Install(service.Options{Binary: *bin, Port: *port})
 	case "uninstall":
-		return service.Uninstall()
+		return service.Uninstall(*ifBin)
 	case "status":
 		fmt.Println(service.Status(*port))
 		return nil
