@@ -56,6 +56,16 @@ func install(o Options) error {
 	return nil
 }
 
+// definition returns the installed unit's text.
+func definition() (string, error) {
+	path, err := unitPath()
+	if err != nil {
+		return "", err
+	}
+	b, err := os.ReadFile(path)
+	return string(b), err
+}
+
 func uninstall() error {
 	path, err := unitPath()
 	if err != nil {

@@ -61,6 +61,11 @@ func install(o Options) error {
 	return nil
 }
 
+// definition returns the scheduled task's XML.
+func definition() (string, error) {
+	return schtasks("/query", "/tn", TaskName, "/xml")
+}
+
 func uninstall() error {
 	if !elevated() {
 		return fmt.Errorf("run from an elevated (Administrator) shell")

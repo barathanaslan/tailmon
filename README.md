@@ -170,13 +170,17 @@ reads.
 
 ## Install
 
-From a release (after the first tagged release):
+From a release:
 
 ```sh
-# macOS / Linux (Homebrew)
+# Mac, menu bar app + agent in one command (Apple Silicon, macOS 14+). The app
+# carries the tailmon binary, puts `tailmon` on PATH and registers the agent
+# service on first launch when none is running.
+brew install --cask barathanaslan/tailmon/tailmon-app
+
+# Mac or Linux, agent/CLI only
 brew install barathanaslan/tailmon/tailmon
 tailmon service install                 # or: brew services start tailmon
-brew install --cask barathanaslan/tailmon/tailmon-app   # menu bar app (Apple Silicon, macOS 14+)
 
 # Windows (Scoop), then in an elevated shell:
 scoop bucket add tailmon https://github.com/barathanaslan/scoop-tailmon
@@ -186,6 +190,9 @@ tailmon service install
 # Debian/Ubuntu or Fedora: the .deb / .rpm from the release page, then
 systemctl --user enable --now tailmon   # or: tailmon service install
 ```
+
+A fully qualified `brew install` trusts just that formula or cask (Homebrew
+6+ tap trust); to use short names, `brew trust barathanaslan/tailmon` once.
 
 `tailmon service install | uninstall | status` is the one way the agent is
 registered everywhere: a user LaunchAgent on macOS, an ONSTART scheduled task

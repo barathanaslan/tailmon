@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/barathanaslan/tailmon/internal/port"
@@ -69,8 +70,19 @@ func Install(o Options) error {
 }
 
 // Uninstall stops and removes the service. Logs are kept. Not an error when
-// nothing is installed.
-func Uninstall() error { return uninstall() }
+// nothing is installed. With onlyIfBin set, the service is removed only when
+// it runs that binary (the Tailmon.app cask removes the agent it installed,
+// never one installed another way).
+func Uninstall(onlyIfBin string) error {
+	if onlyIfBin != "" {
+		def, err := definition()
+		if err != nil || !strings.Contains(def, onlyIfBin) {
+			fmt.Println("service not registered with " + onlyIfBin + "; left as is")
+			return nil
+		}
+	}
+	return uninstall()
+}
 
 // Status describes the service registration and whether the agent answers.
 func Status(p int) string {

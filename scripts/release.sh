@@ -17,7 +17,7 @@ TOKEN="$(gh auth token)"
 
 # Tailmon.app, versioned from the tag.
 plutil -replace CFBundleShortVersionString -string "$VERSION" menubar/Info.plist
-(cd menubar && ./build.sh)
+(cd menubar && TAILMON_VERSION="$VERSION" ./build.sh)
 git checkout menubar/Info.plist
 rm -rf dist-app && mkdir dist-app
 ditto -c -k --keepParent menubar/dist/Tailmon.app "dist-app/Tailmon-$VERSION.zip"

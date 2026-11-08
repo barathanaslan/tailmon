@@ -60,6 +60,16 @@ func bootout() {
 	}
 }
 
+// definition returns the installed plist's text.
+func definition() (string, error) {
+	path, err := plistPath()
+	if err != nil {
+		return "", err
+	}
+	b, err := os.ReadFile(path)
+	return string(b), err
+}
+
 func uninstall() error {
 	path, err := plistPath()
 	if err != nil {
