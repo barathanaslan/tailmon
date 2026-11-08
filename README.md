@@ -190,8 +190,8 @@ systemctl --user enable --now tailmon   # or: tailmon service install
 `tailmon service install | uninstall | status` is the one way the agent is
 registered everywhere: a user LaunchAgent on macOS, an ONSTART scheduled task
 running as SYSTEM on Windows (below-normal priority, no 72h limit), a systemd
-user unit on Linux. Releases are built by GoReleaser from a `v*` tag
-(`.github/workflows/release.yml`).
+user unit on Linux. Releases: push a `v*` tag, then run
+`scripts/release.sh vX.Y.Z` on the Mac (GoReleaser + the Tailmon.app cask).
 
 From source:
 

@@ -1,15 +1,16 @@
-# Release on a version tag: binaries, checksums, deb/rpm, the Homebrew
-# formula (tap barathanaslan/homebrew-tailmon), the Scoop manifest (bucket
+# Release in CI: binaries, checksums, deb/rpm, the Homebrew formula (tap
+# barathanaslan/homebrew-tailmon), the Scoop manifest (bucket
 # barathanaslan/scoop-tailmon), and Tailmon.app + its cask.
 #
-# Needs one repository secret, TAP_GITHUB_TOKEN: a fine-grained token with
-# "Contents: read and write" on homebrew-tailmon and scoop-tailmon (the
+# Releases are normally published from the Mac with scripts/release.sh. This
+# workflow is the manual alternative (Actions -> release -> Run workflow on a
+# tag). It needs a repository secret TAP_GITHUB_TOKEN: a fine-grained token
+# with "Contents: read and write" on homebrew-tailmon and scoop-tailmon (the
 # default GITHUB_TOKEN cannot push to other repositories).
 name: release
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write

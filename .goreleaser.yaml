@@ -1,5 +1,6 @@
-# Release pipeline: `git tag vX.Y.Z && git push --tags` runs
-# .github/workflows/release.yml, which runs this. Local dry run:
+# Release: tag and push (git tag vX.Y.Z && git push origin vX.Y.Z), then
+# scripts/release.sh vX.Y.Z on the Mac (or the manual release workflow).
+# Local dry run:
 #   goreleaser release --snapshot --clean
 version: 2
 project_name: tailmon
