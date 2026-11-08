@@ -18,6 +18,13 @@ cask "tailmon-app" do
   app "Tailmon.app"
   binary "#{appdir}/Tailmon.app/Contents/Resources/tailmon"
 
+  # Ad-hoc signed, not notarized (built for the owner's own Macs): macOS
+  # quarantines the download and Gatekeeper would refuse the app and kill the
+  # bundled binary. Clear it once, at install.
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/Tailmon.app"]
+  end
+
   # Remove the agent service only if it is the one the app installed.
   uninstall quit:   "com.bosphorify.tailmon.menubar",
             script: {
