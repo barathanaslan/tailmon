@@ -96,7 +96,8 @@ ssh user@some-windows-box "tailmon.exe sample"
 One card per host: CPU bar, RAM bar with memory-pressure color, GPU util (+
 VRAM/temp on NVIDIA), disk free, uptime, the remote agent's own RSS, and CPU/
 RAM sparklines. Hosts are `live` (agent answered), `no agent` (online, :7020
-closed), or `offline`. Keys: `q` quit · `p` pause · `r` refresh · `j/k`
+closed), or `offline` (tailscale says offline and the agent does not answer —
+the flag alone is not trusted, it can be stale for shared-in devices). Keys: `q` quit · `p` pause · `r` refresh · `j/k`
 select. Deliberately no power controls — tailmon observes machines, it never
 changes their state. Without the `tailscale` CLI it degrades to monitoring
 localhost only.

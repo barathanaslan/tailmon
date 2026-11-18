@@ -3,11 +3,13 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/barathanaslan/tailmon/internal/aggregate"
 	"github.com/barathanaslan/tailmon/internal/discover"
@@ -15,23 +17,32 @@ import (
 )
 
 // fleetServer: an agent whose "tailnet" is itself (self), one live peer that
-// is a second in-process agent, and one offline peer.
-func fleetServer(t *testing.T) (*server, *httptest.Server, func()) {
+// is a second in-process agent, one offline peer, and extra peers a test adds.
+func fleetServer(t *testing.T, extra ...discover.Host) (*server, *httptest.Server, func()) {
 	t.Helper()
 	peer := httptest.NewServer(Handler())
 	_, portStr, _ := net.SplitHostPort(peer.Listener.Addr().String())
 	peerPort, _ := strconv.Atoi(portStr)
 	hosts := func(context.Context) ([]discover.Host, error) {
-		return []discover.Host{
+		return append([]discover.Host{
 			{Name: "self", IP: "100.0.0.1", OS: "macOS", Online: true, Self: true},
 			{Name: "peer", IP: "127.0.0.1", OS: "linux", Online: true},
-			{Name: "gone", IP: "100.0.0.3", OS: "windows", Online: false},
-		}, nil
+			{Name: "gone", IP: goneIP, OS: "windows", Online: false},
+		}, extra...), nil
 	}
-	s := newServer(config{hosts: hosts, port: peerPort})
+	// The offline peer is never dialed: nothing may leave the machine.
+	fetch := func(ctx context.Context, c *http.Client, ip string, port, top int) (*sample.Stats, error) {
+		if ip == goneIP {
+			return nil, errors.New("unreachable")
+		}
+		return aggregate.FetchStats(ctx, c, ip, port, top)
+	}
+	s := newServer(config{hosts: hosts, port: peerPort, fetch: fetch})
 	srv := httptest.NewServer(s)
 	return s, srv, func() { srv.Close(); peer.Close() }
 }
+
+const goneIP = "100.0.0.3"
 
 func getFleet(t *testing.T, srv *httptest.Server, q string) aggregate.Report {
 	t.Helper()
@@ -82,6 +93,27 @@ func TestFleet(t *testing.T) {
 		if h.Host == "self" && len(h.Stats.TopProcs) <= 3 {
 			t.Errorf("top=10 after top=3: self has %d procs", len(h.Stats.TopProcs))
 		}
+	}
+}
+
+// A peer tailscale reports offline while its agent answers (a stale flag, as
+// seen on shared-in devices) is offline on the first report at most, then
+// live: the agent asks it in the background and trusts the answer.
+func TestFleetStaleOfflineFlag(t *testing.T) {
+	_, srv, done := fleetServer(t, discover.Host{Name: "shared", IP: "localhost", OS: "linux", Online: false})
+	defer done()
+
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		for _, h := range getFleet(t, srv, "").Hosts {
+			if h.Host == "shared" && h.Status == aggregate.StatusLive && h.Stats != nil {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("shared peer with a stale offline flag never became live")
+		}
+		time.Sleep(cacheTTL / 4)
 	}
 }
 

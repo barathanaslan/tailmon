@@ -41,10 +41,12 @@ const (
 type config struct {
 	hosts func(context.Context) ([]discover.Host, error)
 	port  int
+	fetch func(ctx context.Context, client *http.Client, ip string, port, top int) (*sample.Stats, error)
 }
 
 // server holds the agent's bounded state: one cached full sample, one cached
-// lite sample, one cached discovery result, one cached fleet report.
+// lite sample, one cached discovery result, one cached fleet report, and one
+// probe verdict per peer.
 type server struct {
 	mux    *http.ServeMux
 	full   *flight[*sample.Stats]
@@ -83,6 +85,8 @@ func newServer(cfg config) *server {
 		Local:  func(ctx context.Context, _ int) (*sample.Stats, error) { return s.full.get(ctx) },
 		Port:   cfg.port,
 		Client: s.client,
+		Probes: aggregate.NewProbes(),
+		Fetch:  cfg.fetch,
 	}
 	// Peers are always asked for MaxTopProcs so one cached report serves any
 	// ?top=N (trimmed at marshal time) — no per-N cache state.

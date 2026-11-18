@@ -4,8 +4,9 @@
 // (`cuda on`/`cuda off`), per the owner's explicit preference (2026-07-10).
 //
 // Anti-leak rules honored here: fixed-size ring buffers (120 slots per host,
-// allocated once), 800ms request timeouts, 10s probe backoff for hosts
-// without an agent, and an in-flight guard so retries never stack.
+// allocated once), bounded request timeouts, a probe backoff for hosts that
+// do not answer (10s when tailscale says online, aggregate.ProbeInterval when
+// it says offline), and an in-flight guard so retries never stack.
 package tui
 
 import (
@@ -220,8 +221,9 @@ func (m *model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // refreshCmds decides which hosts to query this tick. live hosts refresh
-// every tick; online hosts without an agent are probed on the 10s backoff;
-// offline hosts are left to discovery. force resets backoff (the `r` key).
+// every tick; every other host is probed on its backoff, including the ones
+// tailscale reports offline — that flag can be stale (aggregate/probe.go), so
+// only the agent's answer decides. force resets backoff (the `r` key).
 func (m *model) refreshCmds(force bool) []tea.Cmd {
 	now := time.Now()
 	var cmds []tea.Cmd
@@ -234,7 +236,7 @@ func (m *model) refreshCmds(force bool) []tea.Cmd {
 			cmds = append(cmds, m.fetchCmd(r))
 		case r.status == aggregate.StatusLive:
 			cmds = append(cmds, m.fetchCmd(r))
-		case r.host.Online && (force || now.After(r.nextProbe)):
+		case force || now.After(r.nextProbe):
 			cmds = append(cmds, m.fetchCmd(r))
 		}
 	}
@@ -257,22 +259,23 @@ func (m *model) mergeHosts(hosts []discover.Host) []tea.Cmd {
 	for _, h := range hosts {
 		r, ok := existing[h.Name]
 		if !ok {
-			r = &row{host: h}
+			r = &row{host: h, status: aggregate.StatusNoAgent}
 			if !h.Online {
 				r.status = aggregate.StatusOffline
-			} else {
-				r.status = aggregate.StatusNoAgent
-				cmds = append(cmds, m.fetchCmd(r))
 			}
+			cmds = append(cmds, m.fetchCmd(r))
 			rows = append(rows, r)
 			continue
 		}
 		wasOnline := r.host.Online
 		r.host = h
-		if !h.Online && !h.Self {
+		switch {
+		case r.status == aggregate.StatusLive:
+			// It answers: tailscale's flag does not overrule that.
+		case !h.Online && !h.Self:
 			r.status = aggregate.StatusOffline
 			r.stats = nil
-		} else if h.Online && !wasOnline {
+		case !wasOnline:
 			r.status = aggregate.StatusNoAgent
 			r.nextProbe = time.Time{}
 			if !r.inFlight {
@@ -296,10 +299,15 @@ func (m *model) applyStats(msg statsMsg) {
 		r.inFlight = false
 		if msg.err != nil {
 			r.errMsg = msg.err.Error()
-			if r.status == aggregate.StatusLive {
+			backoff := probeBackoff
+			switch {
+			case !r.host.Online && !r.host.Self:
+				r.status, r.stats = aggregate.StatusOffline, nil
+				backoff = aggregate.ProbeInterval
+			case r.status == aggregate.StatusLive:
 				r.status = aggregate.StatusNoAgent
 			}
-			r.nextProbe = time.Now().Add(probeBackoff)
+			r.nextProbe = time.Now().Add(backoff)
 			return
 		}
 		r.errMsg = ""

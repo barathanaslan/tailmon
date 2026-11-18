@@ -394,3 +394,29 @@ repo rename; later phases: ports/ssh/tmux insight, Windows tray.
   macro without its compiler plugin ("plugin for module 'SwiftUIMacros' not
   found"), so `swift build` fails on a CLT-only Mac. Build against an older
   SDK: `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk ./install.sh`.
+
+---
+
+## 2026-11-18 — v0.3.2: shared-in devices shown offline while up
+
+- Symptom: omerfaruk-mac-mini and tahalinux (shared in from other tailnets)
+  turned grey in the dropdown while both were up. `tailscale status` on the
+  mini said "offline, last seen 40m ago" for both, yet `tailscale ping` got
+  pongs and `:7020/stats` answered 200 at the same moment. Own-tailnet peers
+  had the right flag. The flag came back by itself some 20 minutes later; why
+  tailscale lets it go stale for shared peers was not established.
+- Cause in tailmon: `aggregate.Collect` (and the TUI) wrote `offline` for
+  every peer with `Online: false` and never asked its agent.
+- Fix: the flag is a hint. A flagged-offline peer is asked too; an answer
+  makes it live, silence makes it offline. In the agent a silent one is asked
+  at most every 15s and in the background (`aggregate.Probes`), so `/fleet`
+  never waits for a dead address and tailscale is not made to chase offline
+  peers on every 2s poll. `tailmon json` asks inline and takes the request
+  timeout (2.5s) when a peer really is off. The TUI probes flagged-offline
+  rows on the same 15s backoff and discovery no longer greys out a row that
+  answers. No tailscale setting, service or policy is touched.
+- Checked on the real tailnet with the flag forced to false through a test
+  double of the CLI: 0.3.1 shows both shared peers offline, 0.3.2 shows them
+  live; with a truly dead address in the list `/fleet` stayed at ~0.6s.
+- Only the viewing machine needs the new version; agents on other machines
+  (0.2.0 and 0.3.x alike) are fine as they are.

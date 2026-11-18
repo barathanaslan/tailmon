@@ -23,11 +23,12 @@ import (
 // a later card update for the one slow host.
 const RequestTimeout = 2500 * time.Millisecond
 
-// Host statuses.
+// Host statuses. Tailscale's Online flag alone never makes a host offline:
+// the agent is asked first (see probe.go).
 const (
 	StatusLive    = "live"     // agent (or in-process local sample) answered
 	StatusNoAgent = "no-agent" // host online but :7020 closed / errored
-	StatusOffline = "offline"  // tailscale says the host is offline
+	StatusOffline = "offline"  // tailscale says offline and the agent does not answer
 )
 
 type HostResult struct {
@@ -94,11 +95,18 @@ type Source struct {
 	Local  func(ctx context.Context, top int) (*sample.Stats, error)
 	Port   int
 	Client *http.Client // reused across calls when set (keep-alive)
+	// Probes is set by long-lived callers (the agent) so a flagged-offline
+	// peer that stays silent is asked rarely and off the report's path. Nil:
+	// every flagged-offline peer is asked on each call, and the call waits.
+	Probes *Probes
+	// Fetch asks one agent for its stats. Zero value: FetchStats.
+	Fetch func(ctx context.Context, client *http.Client, ip string, port, top int) (*sample.Stats, error)
 }
 
-// Collect discovers peers and queries every reachable agent in parallel. The
-// local machine is sampled in-process — it shows up even with no local agent
-// running. With no tailscale CLI it degrades to localhost only.
+// Collect discovers peers and queries their agents in parallel, including
+// peers tailscale reports offline (see probe.go). The local machine is
+// sampled in-process — it shows up even with no local agent running. With no
+// tailscale CLI it degrades to localhost only.
 func Collect(ctx context.Context) *Report { return CollectTop(ctx, 0) }
 
 // CollectTop is Collect with an explicit top-process count per host
@@ -110,8 +118,12 @@ func CollectTop(ctx context.Context, top int) *Report {
 // Collect builds one report from src.
 func (src Source) Collect(ctx context.Context, top int) *Report {
 	hostsFn, localFn, p, client := src.Hosts, src.Local, src.Port, src.Client
+	fetch, probes := src.Fetch, src.Probes
 	if hostsFn == nil {
 		hostsFn = discover.Hosts
+	}
+	if fetch == nil {
+		fetch = FetchStats
 	}
 	if localFn == nil {
 		localFn = localStats
@@ -137,27 +149,42 @@ func (src Source) Collect(ctx context.Context, top int) *Report {
 		results = append(results, localResult(ctx, discover.Host{Self: true}, top, localFn))
 	} else {
 		results = results[:len(hosts)]
+		probes.keep(hosts)
 		var wg sync.WaitGroup
 		for i, h := range hosts {
-			if h.Self {
-				continue // sampled below, concurrently with the peers
-			}
-			if !h.Online {
+			switch {
+			case h.Self: // sampled below, concurrently with the peers
+			case h.Online, probes == nil, probes.alive(h.IP):
+				wg.Add(1)
+				go func(i int, h discover.Host) {
+					defer wg.Done()
+					r := HostResult{Host: h.Name, IP: h.IP, OS: h.OS}
+					stats, err := fetch(ctx, client, h.IP, p, top)
+					probes.record(h.IP, err == nil, time.Now())
+					switch {
+					case err == nil:
+						r.Status, r.Source, r.Stats = StatusLive, "agent", stats
+					case h.Online:
+						r.Status, r.Error = StatusNoAgent, err.Error()
+					default:
+						r.Status = StatusOffline
+					}
+					results[i] = r
+				}(i, h)
+			default:
+				// Flagged offline and silent the last time it was asked: the
+				// report says offline now; the next ask runs on its own.
 				results[i] = HostResult{Host: h.Name, IP: h.IP, OS: h.OS, Status: StatusOffline}
-				continue
-			}
-			wg.Add(1)
-			go func(i int, h discover.Host) {
-				defer wg.Done()
-				r := HostResult{Host: h.Name, IP: h.IP, OS: h.OS, Source: "agent"}
-				stats, err := FetchStats(ctx, client, h.IP, p, top)
-				if err != nil {
-					r.Status, r.Source, r.Error = StatusNoAgent, "", err.Error()
-				} else {
-					r.Status, r.Stats = StatusLive, stats
+				if probes.begin(h.IP, time.Now()) {
+					go func(ip string) {
+						// Detached: the caller's context ends with the report.
+						pctx, cancel := context.WithTimeout(context.Background(), RequestTimeout)
+						defer cancel()
+						_, err := fetch(pctx, client, ip, p, top)
+						probes.record(ip, err == nil, time.Now())
+					}(h.IP)
 				}
-				results[i] = r
-			}(i, h)
+			}
 		}
 		for i, h := range hosts {
 			if h.Self {

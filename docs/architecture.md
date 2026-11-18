@@ -112,8 +112,14 @@ v1 leaked memory on a MacBook for about ten days. v2's hard rules:
 
 `tailscale status --json` (PATH, falling back to the macOS app-bundle binary).
 Self + peers filtered to OSes that could run an agent (macOS/windows/linux —
-phones and OS-less shared-in devices are skipped). Peers marked
-live / no-agent / offline by Online flag + a :7020 probe. If the tailscale CLI
+phones and OS-less shared-in devices are skipped). Peers are marked
+live / no-agent / offline by asking their agent on :7020. Tailscale's Online
+flag is only a hint: it can stay "offline" for a shared-in device that is up,
+so a flagged-offline peer is asked too and is live as soon as it answers. One
+that stays silent is asked at most every 15s (`aggregate.ProbeInterval`), in
+the agent off the report's path (`aggregate.Probes`), so a dead address never
+delays `/fleet`; `tailmon json` has no such memory and waits out the request
+timeout for it. If the tailscale CLI
 is missing entirely, `tailmon` monitors localhost only (local sampling is
 in-process and never depends on the agent or tailscale).
 
