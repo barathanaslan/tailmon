@@ -31,6 +31,18 @@ final class FleetModel: ObservableObject {
     /// the local host). Kept here so it survives refreshes and menu reopen.
     @Published private(set) var procsExpanded: [String: Bool] = [:]
     @Published private(set) var loginItemEnabled = false
+    /// The user's device order, hidden devices and pinned cards.
+    @Published private(set) var arrangement = Arrangement()
+    /// The dropdown shows the device list for ordering and hiding.
+    @Published var editing = false
+    /// Room for the dropdown's content on the screen it opens on. Estimated
+    /// from the screen when the menu opens, then set exactly by the window
+    /// fitter, which knows where the window hangs. Previews have no screen:
+    /// everything fits.
+    @Published private(set) var room: CGFloat = 100_000
+    private var roomScreenHeight: CGFloat?
+    /// Tests and snapshots: nothing is saved, fetched or timed.
+    private let isPreview: Bool
     @Published var menuOpen = false {
         didSet { if menuOpen != oldValue { menuOpenChanged() } }
     }
@@ -81,8 +93,11 @@ final class FleetModel: ObservableObject {
         fleet.timeoutIntervalForResource = 10
         fleet.httpMaximumConnectionsPerHost = 1
         fleetSession = URLSession(configuration: fleet)
+        isPreview = preview
         if preview { return }
 
+        arrangement = Arrangement.load()
+        estimateRoom()
         loadPeers()
         agents = AgentRegistry(
             keys: Set(UserDefaults.standard.stringArray(forKey: Self.agentsKey) ?? []))
@@ -132,9 +147,12 @@ final class FleetModel: ObservableObject {
     }
 
     private func menuOpenChanged() {
+        if !menuOpen { editing = false }
+        guard !isPreview else { return }
         fleetTimer?.invalidate()
         fleetTimer = nil
         if menuOpen {
+            estimateRoom()
             refreshLoginItemState()
             refreshLabel() // fresh native numbers for the local card right away
             refreshFleet()
@@ -144,6 +162,30 @@ final class FleetModel: ObservableObject {
             fleetTask?.cancel()
             fleetTask = nil
         }
+    }
+
+    // MARK: - Room on the screen
+
+    /// The window hangs a few points under the menu bar and keeps clear of
+    /// the screen's bottom edge.
+    static let windowGap: CGFloat = 14
+    static let minRoom: CGFloat = 240
+
+    /// A first figure from the screen the pointer is on (the menu was just
+    /// clicked there). Kept as is while the menu reopens on the same screen,
+    /// so the fitter's exact figure is not thrown away on every open.
+    private func estimateRoom() {
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
+        guard let visible = screen?.visibleFrame.height, visible != roomScreenHeight else { return }
+        roomScreenHeight = visible
+        room = max(visible - Self.windowGap, Self.minRoom)
+    }
+
+    /// The exact room, from the window fitter (also what tests set).
+    func setRoom(_ r: CGFloat) {
+        let v = max(r, Self.minRoom)
+        if abs(v - room) >= 1 { room = v }
     }
 
     // MARK: - Login item
@@ -248,12 +290,23 @@ final class FleetModel: ObservableObject {
 
     // Every peer is still probed (that is how a freshly installed agent gets
     // noticed), but only nodes that have run an agent get a letter.
+    // Hidden devices get no letter, and the letters follow the user's order.
     private func currentBadges() -> [PeerBadge] {
-        knownPeers.filter { agents.contains(host: $0.name, ip: $0.ip) }.map {
-            PeerBadge(
-                letter: IconInfo.badgeLetter(for: $0.name),
-                status: peerStatuses[$0.name] ?? .unknown)
-        }
+        knownPeers
+            .filter { agents.contains(host: $0.name, ip: $0.ip) }
+            .map { (peer: $0, key: AgentRegistry.key(host: $0.name, ip: $0.ip)) }
+            .filter { !arrangement.hidden.contains($0.key) }
+            .enumerated()
+            .sorted { a, b in
+                let pa = arrangement.position(a.element.key) ?? Int.max
+                let pb = arrangement.position(b.element.key) ?? Int.max
+                return pa != pb ? pa < pb : a.offset < b.offset
+            }
+            .map {
+                PeerBadge(
+                    letter: IconInfo.badgeLetter(for: $0.element.peer.name),
+                    status: peerStatuses[$0.element.peer.name] ?? .unknown)
+            }
     }
 
     private func loadPeers() {
@@ -337,6 +390,14 @@ final class FleetModel: ObservableObject {
         }
         if rates != rateTracker.rates { rates = rateTracker.rates }
         hosts = visible
+        if r.note == nil { // a degraded report does not know the fleet
+            var kept = arrangement
+            kept.retain(agents.keys.union(keys))
+            if kept != arrangement {
+                arrangement = kept
+                if !isPreview { arrangement.save() }
+            }
+        }
         renderIcon()
     }
 
@@ -427,6 +488,75 @@ final class FleetModel: ObservableObject {
 
     func toggleExpanded(_ h: HostResult) {
         procsExpanded[HostKey.of(h)] = !isExpanded(h)
+    }
+
+    // MARK: - Arrangement (order, hidden devices, one-line cards)
+
+    /// A live device with stats draws as a card; any other is one grey line.
+    func isCard(_ h: HostResult) -> Bool { h.isLive && h.stats != nil }
+
+    func isHidden(_ h: HostResult) -> Bool { arrangement.hidden.contains(HostKey.of(h)) }
+
+    /// Every fleet device in the user's order: the edit list.
+    var arrangedHosts: [HostResult] { arrangement.sorted(hosts) }
+
+    /// What the dropdown lists: cards first, then the offline lines, each
+    /// group in the user's order, hidden devices left out.
+    var shownHosts: [HostResult] {
+        let shown = arrangement.shown(hosts)
+        return shown.filter(isCard) + shown.filter { !isCard($0) }
+    }
+
+    var hiddenCount: Int { hosts.filter(isHidden).count }
+
+    /// Room for the device list: the dropdown's room minus its padding, the
+    /// header line and the one-line notices above the list.
+    var listRoom: CGFloat {
+        var chrome: CGFloat = 10 + 16 + CardLayout.spacing + 10
+        if report?.note != nil { chrome += 12 + CardLayout.spacing }
+        if fleetError != nil { chrome += 12 + CardLayout.spacing }
+        return room - chrome
+    }
+
+    /// Which cards are open for the room there is (CardLayout.plan).
+    var cardPlan: CardPlan {
+        let items = shownHosts.map { h -> CardLayout.Item in
+            let key = HostKey.of(h)
+            guard isCard(h), let s = displayStats(h) else {
+                return CardLayout.Item(key: key, full: nil, pin: nil)
+            }
+            let full = CardLayout.fullHeight(
+                gpus: s.gpu ?? [], disks: disks(for: h).count, hasRates: rates[key] != nil,
+                procs: min(s.topProcs?.count ?? 0, HostCard.maxProcs), procsOpen: isExpanded(h))
+            return CardLayout.Item(key: key, full: full, pin: arrangement.pinned[key])
+        }
+        return CardLayout.plan(items, room: listRoom)
+    }
+
+    /// A click on a card's header: open becomes one line and back. It keeps
+    /// the weakest pin that gets there, so a card the user closed and opened
+    /// again is automatic again, not pinned open forever.
+    func toggleCard(_ h: HostResult) {
+        let key = HostKey.of(h)
+        let wasOpen = cardPlan.open.contains(key)
+        arrangement.pinned[key] = nil
+        if cardPlan.open.contains(key) == wasOpen { arrangement.pinned[key] = !wasOpen }
+        arrangementChanged()
+    }
+
+    func move(_ h: HostResult, by step: Int) {
+        arrangement.move(HostKey.of(h), by: step, among: hosts)
+        arrangementChanged()
+    }
+
+    func toggleHidden(_ h: HostResult) {
+        arrangement.toggleHidden(HostKey.of(h))
+        arrangementChanged()
+    }
+
+    private func arrangementChanged() {
+        if !isPreview { arrangement.save() }
+        renderIcon()
     }
 
     /// Tests/snapshots: start from a known agent registry.

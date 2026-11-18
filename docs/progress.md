@@ -420,3 +420,36 @@ repo rename; later phases: ports/ssh/tmux insight, Windows tray.
   live; with a truly dead address in the list `/fleet` stayed at ~0.6s.
 - Only the viewing machine needs the new version; agents on other machines
   (0.2.0 and 0.3.x alike) are fine as they are.
+
+---
+
+## 2026-11-19 — v0.4.0: the dropdown stays on the screen; order and hiding
+
+- Symptom: with five live devices the dropdown ran off the bottom of a 14"
+  MacBook screen (about 945pt under the menu bar; five cards need about 990
+  even with every processes list closed). `MenuBarExtra(.window)` has no
+  upper bound and `WindowHeightFitter` made the window as tall as the content.
+- Owner picked two of the prototyped options (canvas "Tailmon penceresi:
+  sığdırma ve sıralama prototipleri"): cards that shrink to one line, and an
+  edit mode for order and hiding. His addition: when it does not fit, the
+  last cards become one line by themselves.
+- Done: `CardLayout.plan` opens cards from the top down while the list fits
+  the room and draws the rest as `LineCard` (name, CPU, RAM, GPU in whole
+  percents); a header click toggles a card and is remembered; scrolling only
+  when even the one-line list is too tall. `EditList` (⋯ → Cihazları
+  düzenle…): arrows and an eye per device, nothing added to the normal view
+  except "· N gizli" in the header. `Arrangement` persists order, hidden and
+  pins; hidden devices get no menu bar letter and letters follow the order.
+- The room comes from the window itself (fitter: top edge to the bottom of
+  the visible frame minus 8pt), with an estimate from the screen at menu
+  open so the first frame is already limited.
+- Tests: `LayoutTests` (plan rules, arrangement, header click, computed
+  height == rendered height, and the dropdown in a real transparent window:
+  top edge fixed, bottom edge on the screen, scroll case exactly the room).
+  `testRenderLiveArrangement` (TAILMON_LIVE=1) renders the live fleet for a
+  given room, the edit list and a rearranged fleet.
+- Not checked in the menu bar itself: the tests host the view in an NSPanel,
+  not in MenuBarExtra's own window.
+- Seen once in seven runs, unrelated: `V3Tests.testLiveLocalSampler` failed
+  (no CPU reading after its 0.3s window).
+

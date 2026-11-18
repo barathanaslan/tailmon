@@ -35,8 +35,8 @@ struct FleetView: View {
     @Environment(\.snapshotMode) private var snapshotMode
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header
+        VStack(alignment: .leading, spacing: CardLayout.spacing) {
+            if model.editing { editHeader } else { header }
             if let note = model.report?.note {
                 Text(note).font(.system(size: 10)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -49,8 +49,7 @@ struct FleetView: View {
                 ProgressView().controlSize(.small)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
-            ForEach(liveHosts) { HostCard(result: $0) }
-            ForEach(otherHosts) { OfflineRow(result: $0) }
+            if model.editing { EditList() } else { deviceList }
         }
         .padding(10)
         .frame(width: 340, alignment: .topLeading)
@@ -58,20 +57,40 @@ struct FleetView: View {
         // Layout changes (a host appearing, processes toggled) apply in one
         // step: an animated content height would fight the window resize.
         .transaction { $0.animation = nil }
-        .fitWindowHeight(enabled: !snapshotMode)
+        .fitWindowHeight(enabled: !snapshotMode) { model.setRoom($0) }
         .onAppear { model.menuOpen = true }
         .onDisappear { model.menuOpen = false }
     }
 
-    private var liveHosts: [HostResult] { model.hosts.filter { $0.isLive && $0.stats != nil } }
-    private var otherHosts: [HostResult] { model.hosts.filter { !($0.isLive && $0.stats != nil) } }
+    /// The devices, in the user's order. Cards that do not fit the screen are
+    /// drawn as one line (CardLayout.plan); if even that is too tall, the
+    /// list scrolls inside a window that stays on the screen.
+    @ViewBuilder private var deviceList: some View {
+        let plan = model.cardPlan
+        let list = VStack(alignment: .leading, spacing: CardLayout.spacing) {
+            ForEach(model.shownHosts) { h in
+                if !model.isCard(h) {
+                    OfflineRow(result: h)
+                } else if plan.open.contains(HostKey.of(h)) {
+                    HostCard(result: h)
+                } else {
+                    LineCard(result: h)
+                }
+            }
+        }
+        if plan.scrolls && !snapshotMode {
+            ScrollView(.vertical) { list }
+                .frame(height: max(model.listRoom, CardLayout.lineHeight))
+        } else {
+            list
+        }
+    }
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text("Tailmon").font(.system(size: 13, weight: .semibold))
             if !model.hosts.isEmpty {
-                Text("\(liveHosts.count)/\(model.hosts.count) canlı")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(summary).font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Spacer()
             if let at = model.receivedAt {
@@ -84,6 +103,27 @@ struct FleetView: View {
                 }
             }
             moreMenu
+        }
+        .padding(.horizontal, 2)
+    }
+
+    /// "4/5 canlı", plus "· 1 gizli" so a hidden device is not forgotten.
+    private var summary: String {
+        let shown = model.shownHosts
+        var text = "\(shown.filter(model.isCard).count)/\(shown.count) canlı"
+        if model.hiddenCount > 0 { text += " · \(model.hiddenCount) gizli" }
+        return text
+    }
+
+    private var editHeader: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("Cihazlar").font(.system(size: 13, weight: .semibold))
+            Text("sırala ve gizle").font(.system(size: 11)).foregroundStyle(.secondary)
+            Spacer()
+            Button("Bitti") { model.editing = false }
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
         }
         .padding(.horizontal, 2)
     }
@@ -103,6 +143,7 @@ struct FleetView: View {
                 get: { model.loginItemEnabled },
                 set: { model.setLoginItem($0) }))
             Button("Logu göster") { model.showLog() }
+            Button("Cihazları düzenle…") { model.editing = true }
             Divider()
             Button("Tailmon'dan çık") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")
@@ -124,26 +165,33 @@ struct HostCard: View {
     @EnvironmentObject var model: FleetModel
     let result: HostResult
 
+    static let maxProcs = 6
+
     var body: some View {
         let s = model.displayStats(result)!
         VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Circle().fill(Palette.live).frame(width: 6, height: 6)
-                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
-                Text(result.host).font(.system(size: 12, weight: .semibold))
-                    .lineLimit(1)
-                    .help(agentTooltip(s))
-                Text(subtitle(s)).font(.system(size: 11)).foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                if let up = s.uptimeSec {
-                    Text(Fmt.uptime(up)).font(.system(size: 10)).foregroundStyle(.tertiary)
+            // The header line is the switch between the card and its one-line form.
+            Button(action: { model.toggleCard(result) }) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Circle().fill(Palette.live).frame(width: 6, height: 6)
+                        .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+                    Text(result.host).font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                        .help(agentTooltip(s))
+                    Text(subtitle(s)).font(.system(size: 11)).foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if let up = s.uptimeSec {
+                        Text(Fmt.uptime(up)).font(.system(size: 10)).foregroundStyle(.tertiary)
+                    }
                 }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             MetricsGrid(stats: s, disks: model.disks(for: result))
             RatesLine(rates: model.rates[HostKey.of(result)])
             ProcessList(
-                procs: Array((s.topProcs ?? []).prefix(6)),
+                procs: Array((s.topProcs ?? []).prefix(Self.maxProcs)),
                 expanded: model.isExpanded(result),
                 toggle: { model.toggleExpanded(result) })
         }
@@ -435,6 +483,128 @@ struct ProcessList: View {
     }
 }
 
+// MARK: - One-line card
+
+/// A live device in one line: name and the three numbers that say whether it
+/// is busy. Drawn for a card the user closed, and for the last cards when the
+/// dropdown would not fit the screen. A click opens it.
+struct LineCard: View {
+    @EnvironmentObject var model: FleetModel
+    let result: HostResult
+
+    var body: some View {
+        let s = model.displayStats(result)!
+        Button(action: { model.toggleCard(result) }) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Circle().fill(Palette.live).frame(width: 6, height: 6)
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+                Text(result.host).font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1).truncationMode(.middle)
+                Spacer(minLength: 2)
+                // Whole percents: the line is a glance, and the name needs the width.
+                HStack(spacing: 7) {
+                    metric("CPU", s.cpu.percent)
+                    metric("RAM", ramPct(s))
+                    if let g = s.gpu?.first?.utilPct { metric("GPU", g) }
+                }
+                .fixedSize()
+            }
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 9).fill(.quaternary.opacity(0.6)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func ramPct(_ s: Stats) -> Double {
+        s.mem.totalMb > 0 ? 100 * Double(s.mem.usedMb) / Double(s.mem.totalMb) : 0
+    }
+
+    private func metric(_ label: String, _ percent: Double) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 2) {
+            Text(label).foregroundStyle(.secondary)
+            Text(String(format: "%.0f%%", percent)).fontWeight(.medium)
+        }
+        .font(.system(size: 10))
+    }
+}
+
+// MARK: - Edit list (order and hiding)
+
+/// "Cihazları düzenle…" in the ⋯ menu turns the dropdown into this list:
+/// every fleet device in the user's order, arrows to move it and an eye to
+/// hide it. The controls exist only here; the normal view gains nothing.
+struct EditList: View {
+    @EnvironmentObject var model: FleetModel
+    @Environment(\.snapshotMode) private var snapshotMode
+
+    static let rowHeight: CGFloat = 34
+    static let spacing: CGFloat = 6
+
+    var body: some View {
+        let hosts = model.arrangedHosts
+        let list = VStack(spacing: Self.spacing) {
+            ForEach(Array(hosts.enumerated()), id: \.element.id) { i, h in
+                EditRow(result: h, isFirst: i == 0, isLast: i == hosts.count - 1)
+            }
+        }
+        let height = CGFloat(hosts.count) * Self.rowHeight + CGFloat(max(hosts.count - 1, 0)) * Self.spacing
+        if height > model.listRoom && !snapshotMode {
+            ScrollView(.vertical) { list }.frame(height: max(model.listRoom, Self.rowHeight))
+        } else {
+            list
+        }
+    }
+}
+
+struct EditRow: View {
+    @EnvironmentObject var model: FleetModel
+    let result: HostResult
+    let isFirst: Bool
+    let isLast: Bool
+
+    var body: some View {
+        let hidden = model.isHidden(result)
+        HStack(spacing: 2) {
+            iconButton("chevron.up", "Yukarı taşı", disabled: isFirst) { model.move(result, by: -1) }
+            iconButton("chevron.down", "Aşağı taşı", disabled: isLast) { model.move(result, by: 1) }
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(result.host).font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(hidden ? .secondary : .primary)
+                    .lineLimit(1).truncationMode(.middle)
+                Text(Fmt.osName(result.os ?? result.stats?.os)).font(.system(size: 11))
+                    .foregroundStyle(.secondary).lineLimit(1)
+                if hidden {
+                    Text("· gizli").font(.system(size: 10)).foregroundStyle(.secondary).fixedSize()
+                }
+            }
+            .padding(.leading, 4)
+            Spacer(minLength: 4)
+            iconButton(hidden ? "eye.slash" : "eye", hidden ? "Göster" : "Gizle", disabled: false) {
+                model.toggleHidden(result)
+            }
+        }
+        .padding(.horizontal, 6)
+        .frame(height: EditList.rowHeight)
+        .background(RoundedRectangle(cornerRadius: 9).fill(.quaternary.opacity(0.6)))
+    }
+
+    private func iconButton(_ symbol: String, _ label: String, disabled: Bool,
+                            _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(disabled ? .tertiary : .secondary)
+        .disabled(disabled)
+        .help(label)
+        .accessibilityLabel(label)
+    }
+}
+
 // MARK: - Offline / no-agent row
 
 /// An offline / agent-less host: the same card as a live host, header only.
@@ -461,17 +631,21 @@ struct OfflineRow: View {
 
 extension View {
     /// Keeps the MenuBarExtra window exactly as tall as the content, top edge
-    /// fixed under the menu bar. See WindowHeightFitter.
-    func fitWindowHeight(enabled: Bool = true) -> some View { modifier(FitWindowHeight(enabled: enabled)) }
+    /// fixed under the menu bar, and reports how much room there is below
+    /// that edge on the window's screen. See WindowHeightFitter.
+    func fitWindowHeight(enabled: Bool = true, onRoom: @escaping (CGFloat) -> Void = { _ in }) -> some View {
+        modifier(FitWindowHeight(enabled: enabled, onRoom: onRoom))
+    }
 }
 
 private struct FitWindowHeight: ViewModifier {
     let enabled: Bool
+    let onRoom: (CGFloat) -> Void
 
     func body(content: Content) -> some View {
         content
             .fixedSize(horizontal: false, vertical: true)
-            .background { if enabled { WindowHeightFitter() } }
+            .background { if enabled { WindowHeightFitter(onRoom: onRoom) } }
             // While the window and the content disagree for a moment, keep
             // the content pinned to the top instead of centered: no jump.
             .frame(maxHeight: .infinity, alignment: .top)
@@ -486,11 +660,30 @@ private struct FitWindowHeight: ViewModifier {
 // the fitter's NSView is laid out by SwiftUI at exactly the content's size,
 // and resizes the window synchronously in that same layout pass, before
 // anything is drawn.
+//
+// The window has no upper bound of its own: content taller than the screen
+// ran off its bottom edge. The content now limits itself to the room it is
+// told (FleetModel.room), and this view is where that figure comes from: the
+// distance from the window's top edge down to the bottom of the screen's
+// visible area.
 private struct WindowHeightFitter: NSViewRepresentable {
+    let onRoom: (CGFloat) -> Void
+
     func makeNSView(context: Context) -> FitterView { FitterView() }
-    func updateNSView(_ view: FitterView, context: Context) {}
+    func updateNSView(_ view: FitterView, context: Context) { view.onRoom = onRoom }
 
     final class FitterView: NSView {
+        var onRoom: ((CGFloat) -> Void)?
+        private var reported: CGFloat?
+        private var moves: NSObjectProtocol?
+
+        /// Kept free under the window, so it never touches the screen's edge.
+        static let bottomGap: CGFloat = 8
+
+        deinit {
+            if let moves { NotificationCenter.default.removeObserver(moves) }
+        }
+
         override func setFrameSize(_ newSize: NSSize) {
             super.setFrameSize(newSize)
             fit()
@@ -498,11 +691,32 @@ private struct WindowHeightFitter: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            if let moves { NotificationCenter.default.removeObserver(moves) }
+            moves = nil
+            if let window {
+                moves = NotificationCenter.default.addObserver(
+                    forName: NSWindow.didMoveNotification, object: window, queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.reportRoom() }
+                }
+            }
             fit()
+        }
+
+        private func reportRoom() {
+            guard let window, window.isVisible, let screen = window.screen else { return }
+            let top = window.contentRect(forFrameRect: window.frame).maxY
+            guard top <= screen.frame.maxY else { return } // not placed yet
+            let room = floor(top - screen.visibleFrame.minY - Self.bottomGap)
+            guard room > 0, room != reported else { return }
+            reported = room
+            // Layout is running: hand the figure over after it.
+            DispatchQueue.main.async { [weak self] in self?.onRoom?(room) }
         }
 
         private func fit() {
             guard let window, frame.height > 0 else { return }
+            reportRoom()
             let height = ceil(frame.height)
             let content = window.contentRect(forFrameRect: window.frame)
             guard abs(content.height - height) >= 1 else { return }

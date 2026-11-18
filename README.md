@@ -25,6 +25,14 @@ reading. A device only joins the fleet once it has answered with a live
 agent; tailnet nodes that never ran tailmon (phones, other people's machines)
 are not shown at all. Strictly read-only: no power controls, no kill — by design.
 
+The dropdown always stays on the screen. When the cards do not all fit, the
+last ones are drawn as **one line** (name, CPU, RAM, GPU); a click on a
+card's header line switches that card between the two forms and the choice
+is remembered. **Cihazları düzenle…** in the `⋯` menu turns the dropdown into
+a list where devices are moved up and down and hidden; the order is also the
+priority for which cards stay full, and hidden devices leave the menu bar
+letters too.
+
 Efficiency contract: menu closed → the label's numbers are read natively
 every 5s (a few Mach/sysctl calls and one IORegistry read: **no HTTP, no
 subprocesses, no process scans**), plus one tiny /health probe per known peer

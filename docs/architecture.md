@@ -107,6 +107,22 @@ v1 leaked memory on a MacBook for about ten days. v2's hard rules:
 - The window is sized to the content synchronously in the layout pass
   (`WindowHeightFitter`), with animations off, so toggling processes never
   draws a wrong-size frame.
+- The window has no upper bound of its own, so the content limits itself to
+  the screen. `FleetModel.room` is the height available under the window's
+  top edge: estimated from the screen when the menu opens, then set exactly
+  by the fitter (top edge to the bottom of the screen's visible frame, minus
+  8pt). `CardLayout.plan` decides from it which cards are full: pinned-open
+  ones, then the others from the top down while the whole list still fits;
+  the rest are one line (`LineCard`). Only if the one-line list is still too
+  tall does the list scroll. Card heights are computed, not measured
+  (`CardLayout.fullHeight`), so the decision is made in the same pass that
+  draws; `LayoutTests` holds the computed height to the rendered one.
+- `Arrangement` (UserDefaults `arrangement.v1`, keyed by tailnet IP): the
+  user's device order, hidden devices, and cards pinned open or closed. A
+  header click keeps the weakest pin that changes what is drawn, so a card
+  closed and opened again is automatic again. Order and hiding are edited in
+  the dropdown's edit list (`EditList`, from the ⋯ menu) and apply to the
+  label's letters too.
 
 ## Discovery & degradation
 

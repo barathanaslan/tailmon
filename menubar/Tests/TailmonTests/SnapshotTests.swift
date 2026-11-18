@@ -30,6 +30,42 @@ final class SnapshotTests: XCTestCase {
         try render(model, "/tmp/tailmon-dropdown-live.png")
     }
 
+    /// The live fleet as it draws on a screen with `TAILMON_ROOM` points of
+    /// room (default: a 14" MacBook, 928), then the edit list, then the
+    /// dropdown after one device was moved up and one hidden. PNGs go to
+    /// `TAILMON_SNAPSHOT_DIR` (default /tmp).
+    @MainActor
+    func testRenderLiveArrangement() async throws {
+        let env = ProcessInfo.processInfo.environment
+        try XCTSkipUnless(env["TAILMON_LIVE"] == "1")
+        let dir = env["TAILMON_SNAPSHOT_DIR"] ?? "/tmp"
+        let model = FleetModel(preview: true)
+        model.preloadAgents(UserDefaults(suiteName: "com.bosphorify.tailmon.menubar")?
+            .stringArray(forKey: "agentHosts") ?? [])
+        for i in 0..<2 {
+            if i > 0 { try await Task.sleep(nanoseconds: 2_100_000_000) }
+            let (data, _) = try await URLSession.shared.data(from: FleetModel.fleetURL)
+            model.apply(try tailmonJSONDecoder().decode(Report.self, from: data))
+        }
+        try render(model, "\(dir)/tailmon-all-open.png")
+
+        model.setRoom(CGFloat(Double(env["TAILMON_ROOM"] ?? "") ?? 928))
+        try render(model, "\(dir)/tailmon-fit.png")
+        XCTAssertFalse(model.cardPlan.scrolls)
+
+        model.editing = true
+        try render(model, "\(dir)/tailmon-edit.png")
+
+        let hosts = model.arrangedHosts
+        if hosts.count >= 3 {
+            model.move(hosts[hosts.count - 1], by: -1)
+            model.toggleHidden(hosts[hosts.count - 2])
+            try render(model, "\(dir)/tailmon-edit-changed.png")
+            model.editing = false
+            try render(model, "\(dir)/tailmon-fit-changed.png")
+        }
+    }
+
     @MainActor
     private func render(_ model: FleetModel, _ path: String) throws {
         let view = FleetView().environmentObject(model)
