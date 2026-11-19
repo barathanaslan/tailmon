@@ -453,3 +453,24 @@ repo rename; later phases: ports/ssh/tmux insight, Windows tray.
 - Seen once in seven runs, unrelated: `V3Tests.testLiveLocalSampler` failed
   (no CPU reading after its 0.3s window).
 
+---
+
+## 2026-11-19 — v0.4.1: a dot on the ⋯ when a newer release exists
+
+- Nobody updates: the fleet ran 0.2.0, 0.3.0, 0.3.1 and 0.4.0 side by side,
+  and the app gave no sign that a newer release existed. Owner asked how a
+  mark next to the ⋯ would look and picked the smallest of three renders: a
+  dot on the ⋯ itself.
+- `UpdateCheck`: on menu open, at most once a day, one request to GitHub's
+  `releases/latest`; numeric version compare against the bundle version. The
+  dot shows from the stored answer on the next launches without a request.
+- The ⋯ menu then starts with "Yeni sürüm X: komutu kopyala" (the cask's
+  upgrade command, when the Caskroom folder says this copy is a cask) and
+  "Sürüm notlarını aç"; a copy built from source gets the release page only.
+  A copied command is confirmed in the header for a few seconds.
+- No self-update: the app replacing itself was left out on purpose.
+- README: an "updating" paragraph for every install route (only the cask
+  route was exercised, on the MacBook; the others follow the install steps).
+- Tests: `UpdateCheckTests`. The dot was also captured over the real menu
+  button in a window; the menu's lines themselves were not opened.
+

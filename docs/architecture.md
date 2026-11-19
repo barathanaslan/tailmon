@@ -117,6 +117,12 @@ v1 leaked memory on a MacBook for about ten days. v2's hard rules:
   tall does the list scroll. Card heights are computed, not measured
   (`CardLayout.fullHeight`), so the decision is made in the same pass that
   draws; `LayoutTests` holds the computed height to the rendered one.
+- Newer release (`UpdateCheck`): when the menu opens and the last answer is
+  older than a day, one GET to GitHub's `releases/latest` (a failed one is
+  retried after an hour at the earliest); the answer is kept in UserDefaults.
+  A release newer than the bundle version puts a dot on the ⋯ (drawn over the
+  menu button: AppKit draws the label and would drop it) and adds the upgrade
+  lines to the menu. Never from the menu-closed path.
 - `Arrangement` (UserDefaults `arrangement.v1`, keyed by tailnet IP): the
   user's device order, hidden devices, and cards pinned open or closed. A
   header click keeps the weakest pin that changes what is drawn, so a card

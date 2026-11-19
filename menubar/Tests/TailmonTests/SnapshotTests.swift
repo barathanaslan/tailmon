@@ -66,6 +66,26 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// The live fleet with a newer release pending: the dot on the ⋯.
+    @MainActor
+    func testRenderUpdateDot() async throws {
+        let env = ProcessInfo.processInfo.environment
+        try XCTSkipUnless(env["TAILMON_LIVE"] == "1")
+        let dir = env["TAILMON_SNAPSHOT_DIR"] ?? "/tmp"
+        let model = FleetModel(preview: true)
+        model.preloadAgents(UserDefaults(suiteName: "com.bosphorify.tailmon.menubar")?
+            .stringArray(forKey: "agentHosts") ?? [])
+        for i in 0..<2 {
+            if i > 0 { try await Task.sleep(nanoseconds: 2_100_000_000) }
+            let (data, _) = try await URLSession.shared.data(from: FleetModel.fleetURL)
+            model.apply(try tailmonJSONDecoder().decode(Report.self, from: data))
+        }
+        model.setRoom(CGFloat(Double(env["TAILMON_ROOM"] ?? "") ?? 928))
+        let page = try XCTUnwrap(URL(string: "https://github.com/barathanaslan/tailmon/releases"))
+        model.setLatest(UpdateNotice(version: "9.9.9", page: page), current: "0.4.1")
+        try render(model, "\(dir)/tailmon-update-dot.png")
+    }
+
     @MainActor
     private func render(_ model: FleetModel, _ path: String) throws {
         let view = FleetView().environmentObject(model)

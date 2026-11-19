@@ -2,4 +2,4 @@
 package version
 
 // Version is the tailmon release version.
-var Version = "0.4.0" // overridden by release builds (-ldflags -X)
+var Version = "0.4.1" // overridden by release builds (-ldflags -X)

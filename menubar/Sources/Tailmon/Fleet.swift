@@ -41,6 +41,13 @@ final class FleetModel: ObservableObject {
     /// everything fits.
     @Published private(set) var room: CGFloat = 100_000
     private var roomScreenHeight: CGFloat?
+    /// A release newer than this copy, if the last check found one: the dot
+    /// on the ⋯ (UpdateCheck.swift).
+    @Published private(set) var update: UpdateNotice?
+    /// One line shown in the header for a few seconds after an action.
+    @Published private(set) var flash: String?
+    private var updateTask: Task<Void, Never>?
+    private var lastUpdateAttempt: Date?
     /// Tests and snapshots: nothing is saved, fetched or timed.
     private let isPreview: Bool
     @Published var menuOpen = false {
@@ -98,6 +105,8 @@ final class FleetModel: ObservableObject {
 
         arrangement = Arrangement.load()
         estimateRoom()
+        // The last check's answer, so the dot is there without a request.
+        update = UpdateCheck.notice(latest: UpdateCheck.loadLatest(), current: Self.currentVersion)
         loadPeers()
         agents = AgentRegistry(
             keys: Set(UserDefaults.standard.stringArray(forKey: Self.agentsKey) ?? []))
@@ -153,6 +162,7 @@ final class FleetModel: ObservableObject {
         fleetTimer = nil
         if menuOpen {
             estimateRoom()
+            checkForUpdate()
             refreshLoginItemState()
             refreshLabel() // fresh native numbers for the local card right away
             refreshFleet()
@@ -186,6 +196,56 @@ final class FleetModel: ObservableObject {
     func setRoom(_ r: CGFloat) {
         let v = max(r, Self.minRoom)
         if abs(v - room) >= 1 { room = v }
+    }
+
+    // MARK: - Newer release (the dot on the ⋯)
+
+    static var currentVersion: String? {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    }
+
+    /// Menu just opened: ask GitHub for the latest release if the last answer
+    /// is older than a day. One request, nothing while the menu is closed.
+    private func checkForUpdate(now: Date = Date()) {
+        guard updateTask == nil, let current = Self.currentVersion,
+              UpdateCheck.isDue(now: now, lastChecked: UpdateCheck.lastChecked(), lastAttempt: lastUpdateAttempt)
+        else { return }
+        lastUpdateAttempt = now
+        let session = fleetSession
+        updateTask = Task { [weak self] in
+            let latest = await UpdateCheck.fetch(session)
+            guard let self else { return }
+            self.updateTask = nil
+            guard let latest else { return } // no answer: tried again in an hour at the earliest
+            UpdateCheck.save(latest, at: now)
+            self.setLatest(latest, current: current)
+        }
+    }
+
+    /// Applies a "latest release" answer (internal for tests).
+    func setLatest(_ latest: UpdateNotice?, current: String?) {
+        let next = UpdateCheck.notice(latest: latest, current: current)
+        if next != update { update = next }
+    }
+
+    var upgradeCommand: String? { UpdateCheck.upgradeCommand() }
+
+    func copyUpgradeCommand() {
+        guard let cmd = upgradeCommand else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(cmd, forType: .string)
+        showFlash("komut kopyalandı, Terminal'e yapıştır")
+    }
+
+    func openReleasePage() {
+        if let page = update?.page { NSWorkspace.shared.open(page) }
+    }
+
+    private func showFlash(_ text: String) {
+        flash = text
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+            if self?.flash == text { self?.flash = nil }
+        }
     }
 
     // MARK: - Login item

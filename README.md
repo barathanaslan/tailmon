@@ -40,6 +40,12 @@ every 60s. Menu open → one `GET 127.0.0.1:7020/fleet?top=10` every 2s, one in
 flight max; the local agent fans out and caches. No history kept (one previous
 counter snapshot per host for rates); log capped at 1 MB.
 
+Nothing updates by itself. When a newer release exists, a small dot appears
+on the `⋯`, and the menu offers the upgrade command for a Homebrew install
+(copied to the clipboard) and the release notes. To know, the app asks GitHub
+for the latest release tag when the menu is opened, at most once a day — its
+only request outside the tailnet.
+
 ```
 cd menubar && ./install.sh     # builds Tailmon.app, installs to /Applications
 ```
@@ -202,6 +208,14 @@ systemctl --user enable --now tailmon   # or: tailmon service install
 
 A fully qualified `brew install` trusts just that formula or cask (Homebrew
 6+ tap trust); to use short names, `brew trust barathanaslan/tailmon` once.
+
+Updating is by hand, the way it was installed: `brew upgrade --cask
+barathanaslan/tailmon/tailmon-app` (the app reopens and renews its agent);
+`brew upgrade barathanaslan/tailmon/tailmon` or `scoop update tailmon`, then
+`tailmon service install` again so the running agent is the new binary; a
+newer .deb / .rpm over the old one, then `systemctl --user restart tailmon`.
+Agents and viewers of different versions work together, so machines can be
+updated one at a time.
 
 `tailmon service install | uninstall | status` is the one way the agent is
 registered everywhere: a user LaunchAgent on macOS, an ONSTART scheduled task

@@ -89,7 +89,9 @@ struct FleetView: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text("Tailmon").font(.system(size: 13, weight: .semibold))
-            if !model.hosts.isEmpty {
+            if let flash = model.flash {
+                Text(flash).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+            } else if !model.hosts.isEmpty {
                 Text(summary).font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Spacer()
@@ -128,17 +130,41 @@ struct FleetView: View {
         .padding(.horizontal, 2)
     }
 
-    @ViewBuilder private var moreMenu: some View {
-        if snapshotMode {
-            Image(systemName: "ellipsis").font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-        } else {
-            realMenu
+    /// The ⋯ menu. A newer release puts a small dot on it; the dot sits on
+    /// top of the menu button rather than in its label, which AppKit draws
+    /// and would drop it from.
+    private var moreMenu: some View {
+        Group {
+            if snapshotMode {
+                Image(systemName: "ellipsis").font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+            } else {
+                realMenu
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if model.update != nil {
+                Circle().fill(Color.accentColor).frame(width: 5, height: 5)
+                    .offset(x: 4, y: -3)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
         }
     }
 
     private var realMenu: some View {
         Menu {
+            if let update = model.update {
+                if model.upgradeCommand != nil {
+                    Button("Yeni sürüm \(update.version): komutu kopyala") {
+                        model.copyUpgradeCommand()
+                    }
+                    Button("Sürüm notlarını aç") { model.openReleasePage() }
+                } else {
+                    Button("Yeni sürüm \(update.version): sürüm sayfasını aç") { model.openReleasePage() }
+                }
+                Divider()
+            }
             Toggle("Girişte başlat", isOn: Binding(
                 get: { model.loginItemEnabled },
                 set: { model.setLoginItem($0) }))
@@ -155,7 +181,8 @@ struct FleetView: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Menü")
+        .help(model.update.map { "Menü · yeni sürüm var: \($0.version)" } ?? "Menü")
+        .accessibilityLabel(model.update == nil ? "Menü" : "Menü, yeni sürüm var")
     }
 }
 
