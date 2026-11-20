@@ -81,6 +81,9 @@ v1 leaked memory on a MacBook for about ten days. v2's hard rules:
   subprocess a macOS sample spawns.
 - macOS disks: `getfsstat(MNT_NOWAIT)` (the kernel's cached mount table —
   never blocks on a hung network mount) + `statfs` per real local volume.
+  Disk images (.dmg, .sparsebundle, RAM disks) are left out: IOKit marks
+  the device under every image "Physical Interconnect" = "Virtual
+  Interface", read through purego (no cgo, no subprocess).
 - Disk I/O: gopsutil `disk.IOCounters` summed over physical disks
   (`disk_io`, cumulative; clients compute rates).
 - Windows GPU: `nvidia-smi --query-gpu=…,power.draw,power.limit,fan.speed

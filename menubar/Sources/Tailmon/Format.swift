@@ -23,17 +23,22 @@ enum Fmt {
     /// "3.1 G"
     static func mem(_ mb: UInt64) -> String { String(format: "%.1f G", Double(mb) / 1024) }
 
-    /// Disk used/total: "372 / 494 G" below 1 TiB total, "1.2 / 1.8 T" above.
+    /// Disk used/total: "372 / 494 G" below 1 TiB total, "1.2 / 1.8 T" above,
+    /// "3.2 / 7.5 G" below 10 G (a small stick would read "0 / 0 G" otherwise).
     static func diskPair(used: Double, total: Double) -> String {
         if total >= 1000 {
             return String(format: "%.1f / %.1f T", used / 1024, total / 1024)
         }
+        if total < 9.95 {
+            return String(format: "%.1f / %.1f G", used, total)
+        }
         return String(format: "%.0f / %.0f G", used, total)
     }
 
-    /// Disk free: "122 G boş", "16.4 T boş".
+    /// Disk free: "122 G boş", "16.4 T boş", "0.4 G boş".
     static func diskFree(_ free: Double) -> String {
-        free >= 1000 ? String(format: "%.1f T boş", free / 1024) : String(format: "%.0f G boş", free)
+        if free >= 1000 { return String(format: "%.1f T boş", free / 1024) }
+        return free < 9.95 ? String(format: "%.1f G boş", free) : String(format: "%.0f G boş", free)
     }
 
     /// Process RSS: "149 M", "11.2 G".

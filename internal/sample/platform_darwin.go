@@ -126,8 +126,9 @@ var realFSTypes = map[string]bool{"apfs": true, "hfs": true, "exfat": true, "msd
 
 // platformDisks reports the root volume as mount "/" labelled "HD" (usage
 // from the Data volume, which is where user data lives on a sealed-system
-// Mac) plus every real volume under /Volumes. getfsstat with MNT_NOWAIT
-// returns the kernel's cached mount table without touching any filesystem.
+// Mac) plus every real volume under /Volumes that is not a disk image.
+// getfsstat with MNT_NOWAIT returns the kernel's cached mount table without
+// touching any filesystem.
 func platformDisks(_ context.Context) []Disk {
 	disks := []Disk{}
 	var root unix.Statfs_t
@@ -151,7 +152,7 @@ func platformDisks(_ context.Context) []Disk {
 	for i := 0; i < n; i++ {
 		st := &buf[i]
 		mount := cstr(st.Mntonname[:])
-		if !volumeMount(mount, cstr(st.Fstypename[:]), st.Flags) {
+		if !volumeMount(mount, cstr(st.Fstypename[:]), st.Flags) || isDiskImage(cstr(st.Mntfromname[:])) {
 			continue
 		}
 		// Refresh usage for this one volume (the NOWAIT table can be stale).

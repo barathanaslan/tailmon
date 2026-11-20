@@ -106,7 +106,7 @@ final class LayoutTests: XCTestCase {
         a.order = ["2", "1"]
         a.hidden = ["3"]
         a.pinned = ["1": false]
-        let d = try XCTUnwrap(UserDefaults(suiteName: "tailmon-tests-\(UUID().uuidString)"))
+        let d = try scratchDefaults()
         a.save(d)
         XCTAssertEqual(Arrangement.load(d), a)
     }

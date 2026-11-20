@@ -474,3 +474,28 @@ repo rename; later phases: ports/ssh/tmux insight, Windows tray.
 - Tests: `UpdateCheckTests`. The dot was also captured over the real menu
   button in a window; the menu's lines themselves were not opened.
 
+---
+
+## 2026-11-20 — v0.4.2: disk images are not disks
+
+- The mini's card showed a second disk, "Disk 0 / 0 G Antigravity": the
+  Antigravity installer .dmg, still attached days after the app was
+  installed (its file already deleted). A .dmg opened from Finder has no
+  nobrowse flag, so `volumeMount` let it through, and `Fmt.diskPair` rounded
+  its 0.5 GB to 0.
+- Agent (darwin): `isDiskImage` asks IOKit, from the volume's BSD device up
+  through its parents, for "Protocol Characteristics" → "Physical
+  Interconnect"; "Virtual Interface" is how macOS marks every disk image.
+  Calls go through purego (already linked in by gopsutil), so still no cgo
+  and no extra subprocess. Such volumes are no longer reported.
+- App: below 10 G a disk reads with one decimal ("0.5 / 0.5 G",
+  "0.4 G boş").
+- Tests: `TestDiskImageNotListed` attaches a real .dmg (skipped with
+  `-short`). The Swift tests' UserDefaults suites used to leave one
+  `tailmon-tests-<uuid>.plist` per run in ~/Library/Preferences; they now
+  live in a temporary folder (`scratchDefaults()`; a suite named by an
+  absolute path is stored there). Deleting the plist after the test did not
+  work: cfprefsd writes it again later.
+- Process list looked at in the same report (six rows with the same name,
+  per-core % next to a whole-machine CPU bar): the data is right; owner
+  chose to leave it as it is.

@@ -51,7 +51,7 @@ final class UpdateCheckTests: XCTestCase {
     }
 
     func testLastAnswerRoundTrips() throws {
-        let d = try XCTUnwrap(UserDefaults(suiteName: "tailmon-tests-\(UUID().uuidString)"))
+        let d = try scratchDefaults()
         XCTAssertNil(UpdateCheck.loadLatest(d))
         XCTAssertNil(UpdateCheck.lastChecked(d))
         let latest = UpdateNotice(version: "0.4.1", page: try XCTUnwrap(URL(string: "https://example.com/r")))

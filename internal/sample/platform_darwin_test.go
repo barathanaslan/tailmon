@@ -2,7 +2,12 @@ package sample
 
 import (
 	"context"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestParseIoregDeviceUtil(t *testing.T) {
@@ -76,5 +81,51 @@ func TestPlatformDisksDarwin(t *testing.T) {
 	d := disks[0]
 	if d.TotalGB <= 0 || d.UsedGB <= 0 || d.Kind != KindInternal || d.FSType != "apfs" {
 		t.Errorf("implausible root disk: %+v", d)
+	}
+}
+
+// A .dmg opened the way Finder opens one (browsable, no nobrowse flag) is a
+// disk image to IOKit and never listed as a disk; the internal disk is not.
+func TestDiskImageNotListed(t *testing.T) {
+	if testing.Short() {
+		t.Skip("attaches a disk image")
+	}
+	img := filepath.Join(t.TempDir(), "tailmon-test.dmg")
+	if out, err := exec.Command("/usr/bin/hdiutil", "create", "-size", "8m", "-fs", "APFS",
+		"-volname", "TailmonTestImage", img).CombinedOutput(); err != nil {
+		t.Skipf("hdiutil create: %v %s", err, out)
+	}
+	out, err := exec.Command("/usr/bin/hdiutil", "attach", "-noautoopen", img).CombinedOutput()
+	if err != nil {
+		t.Skipf("hdiutil attach: %v %s", err, out)
+	}
+	var dev, mount string
+	for _, line := range strings.Split(string(out), "\n") {
+		if f := strings.SplitN(line, "\t", 3); len(f) == 3 && strings.HasPrefix(strings.TrimSpace(f[2]), "/Volumes/") {
+			dev, mount = strings.TrimSpace(f[0]), strings.TrimSpace(f[2])
+		}
+	}
+	if dev == "" {
+		t.Fatalf("no mounted volume in hdiutil output: %s", out)
+	}
+	t.Cleanup(func() { _ = exec.Command("/usr/bin/hdiutil", "detach", "-force", mount).Run() })
+
+	if !isDiskImage(dev) {
+		t.Errorf("isDiskImage(%q) = false for an attached .dmg", dev)
+	}
+	for _, d := range platformDisks(context.Background()) {
+		if d.Mount == mount {
+			t.Errorf("disk image listed as a disk: %+v", d)
+		}
+	}
+	var root unix.Statfs_t
+	if err := unix.Statfs("/System/Volumes/Data", &root); err != nil {
+		t.Fatal(err)
+	}
+	if rootDev := cstr(root.Mntfromname[:]); isDiskImage(rootDev) {
+		t.Errorf("isDiskImage(%q) = true for the internal disk", rootDev)
+	}
+	if isDiskImage("") || isDiskImage("map auto_home") || isDiskImage("/dev/disk999s9") {
+		t.Error("non-devices and missing devices must report false")
 	}
 }
