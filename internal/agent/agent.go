@@ -28,30 +28,41 @@ const DefaultPort = port.Default
 
 // Cache timeouts: one sample is bounded by 10s (the sampler's subprocesses
 // carry their own 2s timeouts); one fleet report by the per-peer request
-// timeout plus discovery.
+// timeout plus, on the agent's first report only, the wait for discovery.
 const (
-	sampleTimeout   = 10 * time.Second
-	fleetTimeout    = 8 * time.Second
-	discoverTTL     = 10 * time.Second // a peer that just came online shows up within ~10s
-	discoverTimeout = 3 * time.Second
+	sampleTimeout = 10 * time.Second
+	fleetTimeout  = 8 * time.Second
+)
+
+// Discovery (see roster): the list of machines is asked for again when it is
+// discoverTTL old, off the report's path, and one ask may take
+// discoverTimeout. Only a report made before any list exists waits, for
+// discoverFirstWait. A list that could not be renewed for discoverStaleAfter
+// is still used, with a note in the report.
+const (
+	discoverTTL        = 10 * time.Second // a peer that just came online shows up within ~10s
+	discoverTimeout    = 15 * time.Second
+	discoverFirstWait  = 3 * time.Second
+	discoverStaleAfter = time.Minute
 )
 
 // config makes the handler testable: discovery and the peer port can be
 // swapped out. The zero value means production behavior.
 type config struct {
-	hosts func(context.Context) ([]discover.Host, error)
-	port  int
-	fetch func(ctx context.Context, client *http.Client, ip string, port, top int) (*sample.Stats, error)
+	hosts       func(context.Context) ([]discover.Host, error)
+	port        int
+	fetch       func(ctx context.Context, client *http.Client, ip string, port, top int) (*sample.Stats, error)
+	discoverTTL time.Duration // tests: how soon the list is asked for again
 }
 
 // server holds the agent's bounded state: one cached full sample, one cached
-// lite sample, one cached discovery result, one cached fleet report, and one
-// probe verdict per peer.
+// lite sample, the last list of tailnet machines, one cached fleet report,
+// and one probe verdict per peer.
 type server struct {
 	mux    *http.ServeMux
 	full   *flight[*sample.Stats]
 	lite   *flight[*sample.Stats]
-	hosts  *flight[[]discover.Host]
+	hosts  *roster
 	fleet  *flight[*aggregate.Report]
 	client *http.Client
 }
@@ -71,12 +82,15 @@ func newServer(cfg config) *server {
 	if cfg.port == 0 {
 		cfg.port = port.Default
 	}
+	if cfg.discoverTTL == 0 {
+		cfg.discoverTTL = discoverTTL
+	}
 	s := &server{mux: http.NewServeMux()}
 	s.full = newFlight(cacheTTL, sampleTimeout, func(ctx context.Context) (*sample.Stats, error) {
 		return sample.CollectTop(ctx, sample.MaxTopProcs)
 	})
 	s.lite = newFlight(cacheTTL, sampleTimeout, sample.CollectLite)
-	s.hosts = newFlight(discoverTTL, discoverTimeout, cfg.hosts)
+	s.hosts = newRoster(cfg.discoverTTL, discoverTimeout, discoverFirstWait, discoverStaleAfter, cfg.hosts)
 	// One long-lived client for peer fan-out: keep-alive to each peer, at
 	// most one idle connection per peer, dropped after 30s idle.
 	s.client = aggregate.NewClient()
@@ -91,7 +105,11 @@ func newServer(cfg config) *server {
 	// Peers are always asked for MaxTopProcs so one cached report serves any
 	// ?top=N (trimmed at marshal time) — no per-N cache state.
 	s.fleet = newFlight(cacheTTL, fleetTimeout, func(ctx context.Context) (*aggregate.Report, error) {
-		return src.Collect(ctx, sample.MaxTopProcs), nil
+		report := src.Collect(ctx, sample.MaxTopProcs)
+		if report.Note == "" {
+			report.Note = s.hosts.note()
+		}
+		return report, nil
 	})
 
 	s.mux.HandleFunc("GET /stats", s.handleStats)

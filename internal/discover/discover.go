@@ -14,8 +14,12 @@ import (
 	"time"
 )
 
-// timeout bounds every tailscale CLI call.
-const timeout = 2 * time.Second
+// timeout is the longest a tailscale CLI call may run. It is not a measure of
+// "tailscale is down": on macOS the CLI is the GUI app's own binary, and
+// starting it on a machine whose cores are all taken took 2.5 to 13 s
+// (2026-11-25, load 50 on 12 cores), where it takes 0.1 s on an idle one. A
+// caller that cannot wait that long passes a context with its own deadline.
+const timeout = 15 * time.Second
 
 // ErrNoTailscale: the tailscale CLI is not installed/found. Callers must
 // degrade gracefully (monitor localhost only).
@@ -133,8 +137,8 @@ func findTailscale() string {
 	return ""
 }
 
-// runTailscale execs the CLI with a hard 2s timeout, null stdin, discarded
-// stderr, and a proper wait (reap).
+// runTailscale execs the CLI bounded by timeout (or the caller's earlier
+// deadline), with null stdin, discarded stderr, and a proper wait (reap).
 func runTailscale(ctx context.Context, bin string, args ...string) ([]byte, error) {
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

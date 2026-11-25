@@ -20,15 +20,25 @@ import (
 // is a second in-process agent, one offline peer, and extra peers a test adds.
 func fleetServer(t *testing.T, extra ...discover.Host) (*server, *httptest.Server, func()) {
 	t.Helper()
+	return fleetServerWith(t, func(hosts []discover.Host) ([]discover.Host, error) {
+		return append(hosts, extra...), nil
+	}, 0)
+}
+
+// fleetServerWith is fleetServer with discovery in the test's hands: answer
+// gets the tailnet's three machines and returns what "tailscale" says this
+// time. discoverTTL 0 means the agent's own.
+func fleetServerWith(t *testing.T, answer func([]discover.Host) ([]discover.Host, error), discoverTTL time.Duration) (*server, *httptest.Server, func()) {
+	t.Helper()
 	peer := httptest.NewServer(Handler())
 	_, portStr, _ := net.SplitHostPort(peer.Listener.Addr().String())
 	peerPort, _ := strconv.Atoi(portStr)
 	hosts := func(context.Context) ([]discover.Host, error) {
-		return append([]discover.Host{
+		return answer([]discover.Host{
 			{Name: "self", IP: "100.0.0.1", OS: "macOS", Online: true, Self: true},
 			{Name: "peer", IP: "127.0.0.1", OS: "linux", Online: true},
 			{Name: "gone", IP: goneIP, OS: "windows", Online: false},
-		}, extra...), nil
+		})
 	}
 	// The offline peer is never dialed: nothing may leave the machine.
 	fetch := func(ctx context.Context, c *http.Client, ip string, port, top int) (*sample.Stats, error) {
@@ -37,7 +47,7 @@ func fleetServer(t *testing.T, extra ...discover.Host) (*server, *httptest.Serve
 		}
 		return aggregate.FetchStats(ctx, c, ip, port, top)
 	}
-	s := newServer(config{hosts: hosts, port: peerPort, fetch: fetch})
+	s := newServer(config{hosts: hosts, port: peerPort, fetch: fetch, discoverTTL: discoverTTL})
 	srv := httptest.NewServer(s)
 	return s, srv, func() { srv.Close(); peer.Close() }
 }

@@ -499,3 +499,36 @@ repo rename; later phases: ports/ssh/tmux insight, Windows tray.
 - Process list looked at in the same report (six rows with the same name,
   per-core % next to a whole-machine CPU bar): the data is right; owner
   chose to leave it as it is.
+
+---
+
+## 2026-11-25 — v0.4.3: a slow `tailscale status` no longer empties the list
+
+- The mini's menu showed "tailscale unavailable (signal: killed); local
+  sample only" and only the mini itself; the box was up and its agent
+  answering. The mini was busy at the time: three research jobs with several
+  threads each, load average 43 to 56 on 12 cores.
+- Cause, measured on the mini at that load: `tailscale status --json` took
+  2.5 to 9.2 s at normal priority and 2.8 to 12.9 s at the agent's nice +10
+  (12 calls each; 0.1 s on an idle machine). On macOS the CLI is the GUI
+  app's own binary, so starting it is not cheap. Every call ran into
+  `discover`'s 2 s bound and was killed, and a report without a discovery
+  answer listed the local machine only. The failure was also kept for 10 s
+  like any other cached answer.
+- Agent: the machine list is now a `roster` (`internal/agent/roster.go`). A
+  report takes the list tailscale gave last and does not wait for a new one;
+  when the list is 10 s old, the request that notices starts one ask beside
+  it (still nothing running in an idle agent). An ask that fails leaves the
+  list alone, so peers keep being asked at their agents, which is what decides
+  live/offline since 0.3.2. Only a report made before any list exists waits
+  (3 s), then says "still waiting" and lists the local machine.
+- One ask may now take 15 s (`discover.timeout`, also for `tailmon json` and
+  the TUI, which have no list to fall back on).
+- When the list could not be renewed for a minute, the report says so and
+  keeps the machines: "tailscale status failing (…); device list from 14:32".
+  The online/offline flags in an old list are the ones from that time.
+- Tests: `roster_test.go` (list survives failed asks, a slow renewal runs
+  beside the reports, first ask, no list yet) and
+  `TestFleetKeepsPeersWhenDiscoveryFails` through `/fleet`.
+- Not changed: the agent stays at nice +10; the app is the same except for
+  its version.
